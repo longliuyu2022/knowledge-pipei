@@ -7,6 +7,7 @@ import { Store } from './store.js';
 import { Intelligence } from './ai.js';
 import { Zhihu } from './zhihu.js';
 import { Pairing } from './pairing.js';
+import { createAdminRouter } from './admin.js';
 import { AppError, fail, requiredText, optionalText } from './errors.js';
 import { buildProfile, compareProfiles, DEMO_PROFILES, SAMPLE_PROFILE } from './matching.js';
 import { TOPIC_MAP, GOALS, STYLES } from '../shared/catalog.js';
@@ -62,6 +63,7 @@ export function createApp(config, options = {}) {
   }
   function broadcast(event = 'pool') { for (const userId of streams.keys()) emit(userId, event); }
   const pairing = new Pairing(store, { ...options.pairingOptions, onChange(userId) { emit(userId, 'pairing'); emit(userId); } });
+  const admin = createAdminRouter(config, { store, pairing, onlineIds: () => new Set(streams.keys()) });
   const heartbeat = setInterval(() => { for (const group of streams.values()) for (const res of group) res.write(': heartbeat\n\n'); }, 25000);
   heartbeat.unref();
   const own = req => store.profile(req.viewer.id) || SAMPLE_PROFILE;
@@ -91,6 +93,7 @@ export function createApp(config, options = {}) {
     const queryStart = req.originalUrl.indexOf('?');
     res.redirect(302, `/api/auth/zhihu/callback${queryStart < 0 ? '' : req.originalUrl.slice(queryStart)}`);
   });
+  app.use('/api/admin', admin.router);
   app.use('/api', (req, res, next) => {
     res.set('Cache-Control', 'no-store');
     req.cookies = cookies(req.headers.cookie);
@@ -112,6 +115,7 @@ export function createApp(config, options = {}) {
       if (req.body === undefined) req.body = {};
       if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) fail(400, 'invalid_input', '请求内容需要是 JSON 对象');
     }
+    if (session && !callback) store.touchUser(session.user.id);
     next();
   });
   app.get('/api/bootstrap', (req, res) => res.json(snapshot(req)));
@@ -262,6 +266,7 @@ export function createApp(config, options = {}) {
       if (store.session(req.cookies.soul_session)?.user.id !== request.userId) return res.redirect('/?auth=state_error#profile');
       pairing.forget(request.userId, 'account_changed');
       const user = store.oauthUser(request.userId, connected.identity);
+      store.touchUser(user.id);
       if (user.id !== request.userId && store.profile(request.userId)) store.setDiscoverable(request.userId, false);
       zhihu.setToken(user.id, connected.token, connected.expiresIn);
       store.endSession(req.cookies.soul_session);
@@ -326,18 +331,19 @@ export function createApp(config, options = {}) {
   app.use('/api', (_req, _res) => fail(404, 'not_found', '没有找到这个接口'));
   const dist = resolve(config.root, 'dist');
   if (existsSync(resolve(dist, 'index.html'))) {
+    app.use('/admin', (_req, res, next) => { res.set({ 'X-Robots-Tag': 'noindex, nofollow', 'Cache-Control': 'no-store' }); next(); });
     app.use(express.static(dist, { index: false, maxAge: '1h', dotfiles: 'deny', setHeaders(res, file) { if (file.includes('/assets/')) res.set('Cache-Control', 'public, max-age=31536000, immutable'); } }));
     app.get('/{*path}', (req, res) => {
       if (extname(req.path) || req.path.startsWith('/assets/')) return res.status(404).send('Not found');
-      res.set('Cache-Control', 'no-cache'); res.sendFile(resolve(dist, 'index.html'));
+      res.set('Cache-Control', /^\/admin(?:\/|$)/.test(req.path) ? 'no-store' : 'no-cache'); res.sendFile(resolve(dist, 'index.html'));
     });
   }
   app.use((error, _req, res, _next) => {
     if (res.headersSent) return res.end();
     const status = error instanceof AppError ? error.status : ['entity.parse.failed', 'entity.too.large'].includes(error.type) ? 400 : 500;
-    if (status === 429) res.set('Retry-After', '60');
+    if (status === 429 && !res.hasHeader('Retry-After')) res.set('Retry-After', '60');
     if (status === 500) console.error('Request failed:', error.name || 'Error');
     res.status(status).json({ error: { code: error instanceof AppError ? error.code : 'request_failed', message: error instanceof AppError ? error.message : status === 400 ? '请求内容无效或过大' : '服务暂时遇到问题，请稍后再试' } });
   });
-  return { app, store, ai, zhihu, pairing, close() { clearInterval(heartbeat); pairing.close(); for (const group of streams.values()) for (const res of group) res.end(); store.close(); } };
+  return { app, store, ai, zhihu, pairing, close() { clearInterval(heartbeat); admin.close(); pairing.close(); for (const group of streams.values()) for (const res of group) res.end(); store.close(); } };
 }

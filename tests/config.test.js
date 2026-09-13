@@ -45,3 +45,21 @@ test('Hackathon metadata supplies only public OAuth settings and allows explicit
     assert.equal(loadConfig(root, { SOUL_USE_LOCAL_MODEL: 'false', ZHIHU_OAUTH_APP_ID: '' }).zhihu.oauth.appId, '');
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
+
+test('Admin credentials are server-only, disabled by default, and loaded from a private hash file', () => {
+  const root = mkdtempSync(join(tmpdir(), 'tongpin-admin-config-'));
+  try {
+    assert.equal(loadConfig(root, { SOUL_USE_LOCAL_MODEL: 'false' }).admin.configured, false);
+    writeFileSync(join(root, 'admin_password_hash'), 'synthetic-password-hash\n', { mode: 0o600 });
+    const config = loadConfig(root, { SOUL_USE_LOCAL_MODEL: 'false', CREDENTIALS_DIRECTORY: root, SOUL_ADMIN_USERNAME: 'owner' });
+    assert.equal(config.admin.username, 'owner');
+    assert.equal(config.admin.passwordHash, 'synthetic-password-hash');
+    assert.equal(config.admin.configured, true);
+    assert.equal(JSON.stringify(capabilities(config)).includes('synthetic-password-hash'), false);
+    const privateFile = join(root, 'private-hash-file');
+    writeFileSync(privateFile, 'another-synthetic-hash');
+    assert.equal(loadConfig(root, { SOUL_USE_LOCAL_MODEL: 'false', SOUL_ADMIN_PASSWORD_HASH_FILE: privateFile }).admin.passwordHash, 'another-synthetic-hash');
+    assert.throws(() => loadConfig(root, { SOUL_USE_LOCAL_MODEL: 'false', SOUL_ADMIN_PASSWORD_HASH_FILE: join(root, 'missing') }), /SOUL_ADMIN_PASSWORD_HASH 的服务端凭证文件不可读取/);
+    assert.throws(() => loadConfig(root, { SOUL_USE_LOCAL_MODEL: 'false', SOUL_ADMIN_USERNAME: '../owner' }), /SOUL_ADMIN_USERNAME/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});

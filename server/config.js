@@ -69,12 +69,18 @@ export function loadConfig(root = projectRoot, environment = process.env) {
   };
   const publicOrigin = (env.SOUL_PUBLIC_ORIGIN || '').replace(/\/$/, '');
   if (publicOrigin && !/^https?:\/\/[^/]+$/.test(publicOrigin)) throw new Error('SOUL_PUBLIC_ORIGIN 只包含协议和域名（可带端口）');
+  const admin = {
+    username: env.SOUL_ADMIN_USERNAME || 'admin',
+    passwordHash: credential('SOUL_ADMIN_PASSWORD_HASH', 'admin_password_hash'),
+  };
+  if (!/^[a-zA-Z0-9_.-]{3,64}$/.test(admin.username)) throw new Error('SOUL_ADMIN_USERNAME 需为 3–64 位字母、数字、点、下划线或短横线');
+  admin.configured = Boolean(admin.passwordHash);
   return {
     root, port, host: env.SOUL_HOST || '127.0.0.1',
     databasePath: env.SOUL_DB_PATH || resolve(root, 'data/soulmatch.sqlite'),
     publicOrigin, secureCookies: publicOrigin.startsWith('https://'),
     allowedOrigins: new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`, 'http://127.0.0.1:5176', 'http://localhost:5176', publicOrigin].filter(Boolean)),
-    ai, embedding,
+    ai, embedding, admin,
     zhihu: { accessSecret: credential('ZHIHU_ACCESS_SECRET', 'zhihu_access_secret'), oauth, oauthConfigured: Boolean(oauth.appId && oauth.appKey && oauth.redirectUri) },
   };
 }

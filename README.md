@@ -94,12 +94,15 @@ npm run test:browser
 
 已有浏览器时可设置 `CHROMIUM_PATH=/absolute/path/to/chromium`。浏览器套件自动启动独立服务和临时 SQLite，使用规则模型，不消耗真实模型额度，也不写入正式用户库。
 
-- 58 项后端测试：身份与权限、可解释匹配、在线配对的并发与生命周期、隐私边界、OAuth、模型与向量异常、消息幂等与持久化。
-- 59 项浏览器检查通过：覆盖首页与星图、三步画像、文件导出、邀请聊天、三用户主动在线配对，以及 390px/320px 手机流程。
+- 73 项后端测试：管理员登录与数据权限、历史账号迁移、可解释匹配、在线配对的并发与生命周期、隐私边界、OAuth、模型与向量异常、消息幂等与持久化。
+- 80 项浏览器检查通过：覆盖首页与星图、三步画像、文件导出、邀请聊天、三用户主动在线配对、管理员登录与用户画像管理，以及 390px/320px 手机流程。
 - 公网 HTTPS 8 项检查通过，页面实际完成画像、解释、破冰三次模型调用；临时验收账号已删除。见 [公网验证报告](artifacts/public-validation.json)。
+- 管理后台公网 6 项检查通过：独立登录、未登录拒绝访问、真实统计读取、Cookie 保护、退出失效及浏览器无错误。见 [后台公网验证](artifacts/admin-public-validation.json)。
 - 报告和实际截图保存在 [artifacts/](artifacts/)，总入口为 `artifacts/browser-suite.json`。
 
 ## 技术与部署
+
+站点负责人可在 [管理后台](https://zhihupipei.aiimage.icu/admin) 使用独立账号查看用户、兴趣画像及运营概况。支持搜索、筛选、分页和六维画像详情，知乎用户与访客分别统计。管理员密码通过服务器凭证文件配置；使用方式见 [后台说明](docs/ADMIN.md)。
 
 React 19 + TypeScript + Vite，原生 CSS，D3 Force + SVG 图谱；Express 5 + Node.js SQLite + SSE。单机参赛部署直接使用 SQLite，便于完整复现和持久化。模型适配支持 OpenAI 兼容接口与 Anthropic Messages 协议。
 

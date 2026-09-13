@@ -1,0 +1,34 @@
+{
+  "origin": "https://zhihupipei.aiimage.icu",
+  "status": "passed",
+  "startedAt": "2026-09-13T03:39:30.709Z",
+  "checks": [
+    {
+      "label": "公网后台入口可访问且禁止缓存与搜索索引",
+      "status": "passed"
+    },
+    {
+      "label": "未登录时无法读取用户列表、详情或概况",
+      "status": "passed"
+    },
+    {
+      "label": "管理员可使用独立密码建立受保护的会话",
+      "status": "passed"
+    },
+    {
+      "label": "登录后实际读取概况和一页用户，验证字段后不保存个人数据",
+      "status": "passed"
+    },
+    {
+      "label": "后台页面能加载真实接口，浏览器与资源无错误",
+      "status": "passed"
+    },
+    {
+      "label": "退出后会话立即失效且不创建普通访客身份",
+      "status": "passed"
+    }
+  ],
+  "pageErrors": [],
+  "assetErrors": [],
+  "finishedAt": "2026-09-13T03:39:35.524Z"
+}

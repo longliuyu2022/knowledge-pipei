@@ -17,6 +17,8 @@ HTTPS 443 · Caddy
 
 知乎 App Key 和 Access Secret 单独使用 systemd Credentials：仓库外的 `/etc/soulmatch/` 保存 `0600` 凭证文件，`soulmatch.service.d/zhihu.conf` 通过 `LoadCredential` 挂载给服务。代码从 `CREDENTIALS_DIRECTORY` 读取，也支持显式的 `ZHIHU_OAUTH_APP_KEY_FILE` / `ZHIHU_ACCESS_SECRET_FILE`。公开 App ID 与回调从 `hackathon.config.json` 读取。参见 [凭证模板](../deploy/zhihu-credentials.conf.example) 与 [官方 Skill 初始化记录](ZHIHU_SETUP.md)。
 
+管理后台位于 `/admin`，使用独立登录。`soulmatch.service.d/admin.conf` 通过 `LoadCredential=admin_password_hash:/etc/soulmatch/admin_password_hash` 注入 scrypt 哈希。初始随机密码单独交付，哈希和密码均不进入 Git。配置与密码重置见 [后台说明](ADMIN.md) 和 [管理员凭证模板](../deploy/admin-credentials.conf.example)。
+
 ## 安装与启动
 
 在目标服务器修改 [服务模板](../deploy/soulmatch.service) 中的绝对路径，确保 Node 22.13+ 可用。安装依赖并构建，再创建数据目录、安装 service 并启动：

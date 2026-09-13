@@ -1,0 +1,146 @@
+{
+  "suite": "admin",
+  "status": "passed",
+  "startedAt": "2026-09-13T03:46:53.824Z",
+  "checks": [
+    {
+      "label": "隔离 SQLite 准备多页访客与知乎用户、私密/公开/空画像，外部能力全部关闭",
+      "status": "passed",
+      "elapsedMs": 667
+    },
+    {
+      "label": "直接进入 /admin 只创建独立管理员登录凭证，不调用普通 bootstrap 或创建访客",
+      "status": "passed",
+      "elapsedMs": 709
+    },
+    {
+      "label": "匿名及普通用户会话均无法读取管理概况、列表或画像详情",
+      "status": "passed",
+      "elapsedMs": 43
+    },
+    {
+      "label": "真实错误密码保留登录界面，缺少 CSRF 或跨站登录被服务器拒绝",
+      "status": "passed",
+      "elapsedMs": 487
+    },
+    {
+      "label": "真实 UI 登录成功并轮换管理员凭证，普通访客和会话总数保持不变",
+      "status": "passed",
+      "elapsedMs": 607
+    },
+    {
+      "label": "概况区分知乎授权用户与自动访客，近七天按北京时间首次加入统计",
+      "status": "passed",
+      "elapsedMs": 621
+    },
+    {
+      "label": "真实用户列表逐页读取全部 66 位身份，无遗漏重复且首尾分页按钮正确",
+      "status": "passed",
+      "elapsedMs": 846
+    },
+    {
+      "label": "特殊字符昵称按字面量搜索并安全展示，百分号和下划线不会扩大查询",
+      "status": "passed",
+      "elapsedMs": 642
+    },
+    {
+      "label": "身份、画像、公开状态和兴趣可组合筛选，修改条件会回到第一页",
+      "status": "passed",
+      "elapsedMs": 705
+    },
+    {
+      "label": "筛选无结果显示真实空态，清空搜索及全部条件恢复完整列表",
+      "status": "passed",
+      "elapsedMs": 335
+    },
+    {
+      "label": "私密画像详情展示真实六维兴趣与交流信息，只返回导入和聊天数量",
+      "status": "passed",
+      "elapsedMs": 1296
+    },
+    {
+      "label": "未建画像用户不显示体验画像，历史授权时间缺失保持暂无记录",
+      "status": "passed",
+      "elapsedMs": 1295
+    },
+    {
+      "label": "公开画像详情准确标记公开状态，后台查看不会改变任何用户资料",
+      "status": "passed",
+      "elapsedMs": 915
+    },
+    {
+      "label": "390px 手机后台概况、筛选、用户卡片与六维详情无横向溢出",
+      "status": "passed",
+      "elapsedMs": 1087
+    },
+    {
+      "label": "320px 手机后台概况、筛选、用户卡片与六维详情无横向溢出",
+      "status": "passed",
+      "elapsedMs": 1292
+    },
+    {
+      "label": "整页刷新保持管理员会话，浏览器存储不保存密码或用户资料",
+      "status": "passed",
+      "elapsedMs": 1028
+    },
+    {
+      "label": "真实 UI 退出立即销毁旧会话，并清除两个标签页中的列表和画像详情",
+      "status": "passed",
+      "elapsedMs": 1761
+    },
+    {
+      "label": "退出后浏览器后退或刷新不会恢复受保护内容，也不会创建普通访客",
+      "status": "passed",
+      "elapsedMs": 984
+    },
+    {
+      "label": "服务端八小时绝对过期后真实刷新与标签页恢复都要求重新登录",
+      "status": "passed",
+      "elapsedMs": 3612
+    },
+    {
+      "label": "后台响应与页面未泄漏原始导入、聊天或凭据，访客会话及真实业务数据保持完整",
+      "status": "passed",
+      "elapsedMs": 166
+    },
+    {
+      "label": "浏览器运行与静态资源无错误",
+      "status": "passed",
+      "elapsedMs": 0
+    }
+  ],
+  "pageErrors": [],
+  "assetErrors": [],
+  "configuration": {
+    "users": 66,
+    "database": "temporary isolated SQLite",
+    "identities": "fictional guest and OAuth fixtures",
+    "ai": false,
+    "zhihu": false,
+    "authorization": "real administrator API; no API mocks"
+  },
+  "counts": {
+    "totalUsers": 66,
+    "zhihuUsers": 43,
+    "guestUsers": 23,
+    "profileUsers": 48,
+    "discoverableUsers": 16,
+    "onlineUsers": 0,
+    "newUsersToday": 63,
+    "connections": 1,
+    "messages": 1
+  },
+  "screenshots": [
+    "admin-desktop.png",
+    "admin-detail-desktop.png",
+    "admin-mobile-390.png",
+    "admin-detail-mobile-390.png",
+    "admin-mobile-320.png",
+    "admin-detail-mobile-320.png"
+  ],
+  "expiration": {
+    "absoluteSessionMs": 28800000,
+    "clock": "Date.now advanced only inside the isolated browser-test Node process, then restored"
+  },
+  "finishedAt": "2026-09-13T03:47:13.752Z"
+}

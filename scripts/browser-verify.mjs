@@ -9,7 +9,7 @@ const report = { status: 'running', startedAt: new Date().toISOString(), suites:
 const save = () => writeFileSync(file, JSON.stringify(report, null, 2) + '\n');
 save();
 try {
-  for (const suite of ['discovery', 'profile', 'connections', 'pairing']) {
+  for (const suite of ['discovery', 'profile', 'connections', 'pairing', 'admin']) {
     const started = Date.now();
     const code = await new Promise((done, reject) => {
       const child = spawn(process.execPath, [`scripts/browser-${suite}.mjs`], { cwd: projectRoot, stdio: 'inherit', env: process.env });

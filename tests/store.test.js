@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { DatabaseSync } from 'node:sqlite';
 import { Store } from '../server/store.js';
 import { SAMPLE_PROFILE } from '../server/matching.js';
 
@@ -27,4 +28,35 @@ test('SQLite migration preserves legacy messages and adds durable retry deduplic
   assert.deepEqual(store.sendMessage(a.id, conversation, '可以安全重试的消息', clientMessageId).message, saved);
   assert.equal(store.messages(a.id, conversation).items.length, 2);
   store.close();
+});
+
+test('User metadata migration preserves historical accounts and tracks real activity and first OAuth registration', t => {
+  const directory = mkdtempSync(join(tmpdir(), 'tongpin-user-migration-'));
+  t.after(() => rmSync(directory, { recursive: true, force: true }));
+  const path = join(directory, 'test.sqlite'), guestId = randomUUID(), zhihuId = randomUUID();
+  const legacy = new DatabaseSync(path);
+  legacy.exec("CREATE TABLE users (id TEXT PRIMARY KEY, name TEXT NOT NULL, provider TEXT NOT NULL DEFAULT 'guest', subject TEXT UNIQUE, avatar TEXT NOT NULL DEFAULT '', created_at TEXT NOT NULL)");
+  const oldTime = '2026-01-01T00:00:00.000Z';
+  legacy.prepare('INSERT INTO users VALUES (?, ?, ?, ?, ?, ?)').run(guestId, '历史访客', 'guest', null, '', oldTime);
+  legacy.prepare('INSERT INTO users VALUES (?, ?, ?, ?, ?, ?)').run(zhihuId, '历史用户', 'zhihu', 'fake-legacy-subject', '', oldTime);
+  legacy.close();
+  const store = new Store(path);
+  t.after(() => store.close());
+  const row = id => store.db.prepare('SELECT created_at, registered_at, last_seen_at FROM users WHERE id = ?').get(id);
+  assert.deepEqual({ ...row(zhihuId) }, { created_at: oldTime, registered_at: null, last_seen_at: null });
+  const first = Date.parse('2026-09-13T00:00:00Z');
+  store.touchUser(guestId, first);
+  store.touchUser(guestId, first + 59000);
+  assert.equal(row(guestId).last_seen_at, new Date(first).toISOString());
+  store.touchUser(guestId, first + 60000);
+  assert.equal(row(guestId).last_seen_at, new Date(first + 60000).toISOString());
+  store.oauthUser(guestId, { subject: 'fake-new-subject', name: '已注册', avatar: '' });
+  const registered = row(guestId).registered_at;
+  assert.ok(registered);
+  assert.equal(row(guestId).created_at, oldTime);
+  store.oauthUser(guestId, { subject: 'fake-new-subject', name: '再次登录', avatar: '' });
+  assert.equal(row(guestId).registered_at, registered);
+  store.oauthUser(zhihuId, { subject: 'fake-legacy-subject', name: '历史账号再次登录', avatar: '' });
+  assert.equal(row(zhihuId).registered_at, null);
+  assert.deepEqual(Object.keys(store.user(guestId)).sort(), ['avatar', 'id', 'name', 'provider']);
 });

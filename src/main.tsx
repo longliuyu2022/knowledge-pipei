@@ -4,6 +4,9 @@ import App from './App';
 import './styles.css';
 import './readability.css';
 
+const AdminApp = React.lazy(() => import('./AdminApp'));
+const isAdmin = /^\/admin(?:\/|$)/.test(location.pathname);
+
 class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { failed: boolean }> {
   state = { failed: false };
   static getDerivedStateFromError() { return { failed: true }; }
@@ -12,4 +15,4 @@ class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { fai
     return this.props.children;
   }
 }
-ReactDOM.createRoot(document.getElementById('root')!).render(<ErrorBoundary><App/></ErrorBoundary>);
+ReactDOM.createRoot(document.getElementById('root')!).render(<ErrorBoundary>{isAdmin ? <React.Suspense fallback={<main className="boot-screen" aria-busy="true">正在打开管理后台…</main>}><AdminApp/></React.Suspense> : <App/>}</ErrorBoundary>);

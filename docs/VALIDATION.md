@@ -4,7 +4,7 @@
 
 运行 `npm test` 使用 Node.js 原生测试框架。API 测试启动临时端口，数据库使用独立的 `:memory:`；迁移测试仅在系统临时目录创建数据库并在结束后移除。测试不会加载 `.env.local`、调用真实模型/知乎或读写生产 `data/`。
 
-2026-09-13 完整复核结果：58 项通过、0 失败、0 跳过，总耗时约 4.4 秒。Node.js 当前会为 `node:sqlite` 显示实验性提示，未影响运行和结果。
+2026-09-13 完整复核结果：73 项通过、0 失败、0 跳过，总耗时约 15.84 秒。Node.js 当前会为 `node:sqlite` 显示实验性提示，未影响运行和结果。
 
 验证范围：
 
@@ -22,17 +22,21 @@
 - OAuth 一次性 state、浏览器和原会话绑定、十分钟过期、成功后会话轮换、登录期间退出后不会被迟到响应恢复。
 - 公网 `/auth/callback` 将原始参数交给既有回调处理；保留 Cookie 路径与全部授权校验。
 - 公开项目配置、环境覆盖优先级、服务端凭证文件错误处理，以及 capabilities 不返回密钥。
+- 独立管理员 Cookie / CSRF、登录轮换、绝对过期与退出、并发登录、错误密码限流及未配置时拒绝读取数据。
+- 普通用户和匿名请求不能访问管理统计、用户列表或画像详情；管理响应不包含原始知乎导入、聊天正文、OAuth subject、令牌和密码哈希。
+- 管理列表搜索、字面通配符、筛选、分页和北京时间统计；管理员查询不会创建访客、更新用户活跃时间或推进配对队列。
+- 历史用户表新增注册和活跃时间字段后原记录保持完整；历史未知时间保留为空，新授权记录首次注册时间，活跃记录每分钟最多写入一次。
 - Token 缺失/过期/鉴权失败停止读取；频率与日配额错误保留身份，不读取开发者账号数据。
 - 最小范围的选择性导入、缓存并发去重、授权撤回后不重新写入旧结果。
 - 模型 JSON/schema 和证据 ID/搜索引用验证，失败原因明确的规则降级。
 - 文本模型和向量共用 5 RPM/2 并发限制；向量去重、格式校验及实际算法标识。
 - HTTPS Secure Cookie、未配置 OAuth 时的可控响应、API 限流的 Retry-After。
 
-测试文件：`tests/api.test.js`、`tests/ai.test.js`、`tests/matching.test.js`、`tests/pairing.test.js`、`tests/zhihu.test.js`、`tests/config.test.js`、`tests/store.test.js`。
+测试文件：`tests/api.test.js`、`tests/ai.test.js`、`tests/matching.test.js`、`tests/pairing.test.js`、`tests/zhihu.test.js`、`tests/admin.test.js`、`tests/config.test.js`、`tests/store.test.js`。
 
 ## 浏览器完整流程
 
-2026-09-13 10:40（Asia/Shanghai），生产构建通过 TypeScript 检查后运行 `npm run test:browser`，四个套件共 59 项全部通过，耗时约 66.7 秒。使用真实 Chromium、独立测试服务和临时 SQLite；关闭模型和知乎网络调用，不触碰正式用户数据。
+2026-09-13 11:45（Asia/Shanghai），生产构建通过 TypeScript 检查后运行 `npm run test:browser`，五个套件共 80 项全部通过，耗时约 87.9 秒。使用真实 Chromium、独立测试服务和临时 SQLite；关闭模型和知乎网络调用，不触碰正式用户数据。
 
 | 套件 | 检查数 | 重点 |
 | --- | --- | --- |
@@ -40,6 +44,7 @@
 | 知识画像 | 14 | 三步创建、兴趣范围、私有与公开切换、编辑持久化、PNG/JSON 下载、删除、390px/320px 手机流程 |
 | 邀请与聊天 | 17 | 两个独立身份、双方同意、SSE 同步、幂等重试、草稿保护、110 条消息分页、双向屏蔽、手机输入区 |
 | 主动在线配对 | 17 | 三个独立身份、真实等待、相互配对、双方确认后直达聊天、换人、取消、迟到请求、掉线与超时、390px/320px 布局 |
+| 管理后台 | 21 | 独立登录与权限、66 个虚构用户分页、字面搜索与组合筛选、私密/公开/空画像详情、退出及多标签失效、八小时过期、390px/320px 布局 |
 
 所有套件均无页面脚本或静态资源错误。汇总报告：[browser-suite.json](../artifacts/browser-suite.json)。各套件报告及实际截图同处于 `artifacts/`；测试身份与对话内容均为专门构造的虚构资料。
 
@@ -84,3 +89,9 @@
 可选 embedding 模型当前未配置，实际发现页使用主题向量；向量协议与降级经过 Mock 验证，不声称已接通真实 embedding。
 
 浏览器各套件报告和截图保存在 [artifacts/](../artifacts/)，运行和维护方式见 [部署说明](DEPLOYMENT.md)。
+
+## 管理后台公网验证
+
+`node scripts/verify-admin-live.mjs` 使用单独交付的管理员凭证访问正式 HTTPS 域名，6 项检查全部通过：后台页面禁止缓存和索引；匿名不能读取用户、详情或概况；独立管理员登录和 Cookie 属性正确；统计与一条用户查询可用；页面脚本和资源无错误；退出后无法继续读取管理数据。
+
+此验证不创建普通访客，不修改用户资料，不加入匹配，不调用模型或知乎接口。读取真实接口后只核验状态及字段，不保存用户资料、Cookie、密码、浏览器身份或包含真实用户的截图。脱敏报告见 [admin-public-validation.json](../artifacts/admin-public-validation.json)。

@@ -8,6 +8,12 @@ import { loadConfig, projectRoot } from '../server/config.js';
 import { createApp } from '../server/app.js';
 
 export async function runBrowserSuite(name, run, options = {}) {
+  const { configOverrides = {}, ...appOptions } = options;
+  assert.ok(configOverrides && typeof configOverrides === 'object' && !Array.isArray(configOverrides), 'configOverrides must be an object.');
+  const allowedOverrides = new Set(['SOUL_ADMIN_USERNAME', 'SOUL_ADMIN_PASSWORD_HASH']);
+  for (const [key, value] of Object.entries(configOverrides)) {
+    assert.ok(allowedOverrides.has(key) && typeof value === 'string', 'Browser configuration overrides are limited to test administrator credentials.');
+  }
   if (!existsSync(resolve(projectRoot, 'dist/index.html'))) throw new Error('Run npm run build before browser verification.');
   const artifactsDir = resolve(projectRoot, 'artifacts'); mkdirSync(artifactsDir, { recursive: true });
   const reportPath = resolve(artifactsDir, `browser-${name}.json`);
@@ -16,10 +22,15 @@ export async function runBrowserSuite(name, run, options = {}) {
   save();
   const directory = mkdtempSync(join(tmpdir(), `tongpin-${name}-`));
   const config = loadConfig(projectRoot, {
+    SOUL_ADMIN_USERNAME: '', SOUL_ADMIN_PASSWORD_HASH: '', ...configOverrides,
+    SOUL_ADMIN_PASSWORD_HASH_FILE: '', CREDENTIALS_DIRECTORY: '',
     SOUL_DB_PATH: join(directory, 'test.sqlite'), SOUL_PUBLIC_ORIGIN: '', SOUL_AI_ENABLED: 'false', SOUL_USE_LOCAL_MODEL: 'false',
-    SOUL_EMBEDDING_MODEL: '', ZHIHU_ACCESS_SECRET: '', ZHIHU_OAUTH_APP_ID: '', ZHIHU_OAUTH_APP_KEY: '', ZHIHU_OAUTH_REDIRECT_URI: '',
+    SOUL_AI_API_KEY: '', SOUL_AI_BASE_URL: '', SOUL_AI_MODEL: '', SOUL_AI_CONFIG_FILE: '', SOUL_LOCAL_MODEL_CONFIG: '',
+    SOUL_EMBEDDING_API_KEY: '', SOUL_EMBEDDING_BASE_URL: '', SOUL_EMBEDDING_MODEL: '',
+    ZHIHU_ACCESS_SECRET: '', ZHIHU_ACCESS_SECRET_FILE: '', ZHIHU_OAUTH_APP_ID: '',
+    ZHIHU_OAUTH_APP_KEY: '', ZHIHU_OAUTH_APP_KEY_FILE: '', ZHIHU_OAUTH_REDIRECT_URI: '',
   });
-  const service = createApp(config, options);
+  const service = createApp(config, appOptions);
   const server = service.app.listen(0, '127.0.0.1'); await once(server, 'listening');
   const origin = `http://127.0.0.1:${server.address().port}`; config.allowedOrigins.add(origin);
   const executablePath = process.env.CHROMIUM_PATH || ['/usr/local/bin/chromium-browser', '/usr/bin/chromium', '/usr/bin/chromium-browser', '/usr/bin/google-chrome'].find(existsSync);

@@ -1,7 +1,7 @@
 {
-  "exportedAt": "2026-09-13T02:41:09.072Z",
+  "exportedAt": "2026-09-13T03:46:11.183Z",
   "user": {
-    "id": "db6563e7-ac55-4cb9-ba13-a0c4d4d86939",
+    "id": "95f0d22e-e4ea-4055-b259-b384096bc13c",
     "name": "书与星光 · 新篇",
     "provider": "guest",
     "avatar": ""
@@ -184,7 +184,7 @@
     },
     "revision": 2,
     "discoverable": false,
-    "updatedAt": "2026-09-13T02:41:07.285Z"
+    "updatedAt": "2026-09-13T03:46:09.100Z"
   },
   "imports": {
     "items": [],

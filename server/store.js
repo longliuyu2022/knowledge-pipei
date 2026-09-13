@@ -59,11 +59,21 @@ export class Store {
         target_id TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY (user_id, target_id)
       );
     `);
+    const userColumns = this.db.prepare('PRAGMA table_info(users)').all();
+    for (const column of ['last_seen_at', 'registered_at']) {
+      if (!userColumns.some(item => item.name === column)) this.db.exec(`ALTER TABLE users ADD COLUMN ${column} TEXT`);
+    }
+    this.db.exec('CREATE INDEX IF NOT EXISTS users_created_at ON users(created_at, id)');
+    this.db.exec('CREATE INDEX IF NOT EXISTS users_last_seen_at ON users(last_seen_at, id)');
     if (!this.db.prepare('PRAGMA table_info(messages)').all().some(column => column.name === 'client_message_id')) this.db.exec('ALTER TABLE messages ADD COLUMN client_message_id TEXT');
     this.db.exec('CREATE UNIQUE INDEX IF NOT EXISTS message_retry_key ON messages(author_id, conversation_id, client_message_id) WHERE client_message_id IS NOT NULL');
   }
   close() { this.db.close(); }
   user(userId) { return this.db.prepare('SELECT id, name, provider, avatar FROM users WHERE id = ?').get(userId) || null; }
+  touchUser(userId, timestamp = Date.now()) {
+    const at = new Date(timestamp).toISOString(), before = new Date(timestamp - 60000).toISOString();
+    this.db.prepare('UPDATE users SET last_seen_at = ? WHERE id = ? AND (last_seen_at IS NULL OR last_seen_at <= ?)').run(at, userId, before);
+  }
   createUser(name = '新朋友') {
     const userId = id();
     this.db.prepare('INSERT INTO users (id, name, created_at) VALUES (?, ?, ?)').run(userId, name, now());
@@ -90,7 +100,7 @@ export class Store {
     }
     const previous = this.user(previousId);
     const user = previous?.provider === 'guest' ? previous : this.createUser(identity.name);
-    this.db.prepare("UPDATE users SET name = ?, provider = 'zhihu', subject = ?, avatar = ? WHERE id = ?").run(identity.name, identity.subject, identity.avatar, user.id);
+    this.db.prepare("UPDATE users SET name = ?, provider = 'zhihu', subject = ?, avatar = ?, registered_at = ? WHERE id = ?").run(identity.name, identity.subject, identity.avatar, now(), user.id);
     return this.user(user.id);
   }
   profile(userId) {
