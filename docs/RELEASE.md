@@ -31,4 +31,4 @@
 
 旧内容按明确来源导入历史轮；不能恢复的旧成果版本不伪造，无法核验新授权边界的旧 AI 输出默认隐藏。源库以独立快照迁入，旧站之后的写入不自动同步。详情见 [MIGRATION.md](MIGRATION.md) 与 [PRIVACY.md](PRIVACY.md)。
 
-知乎新域名的真实授权最终确认由开发者本人完成，状态单列于 [VALIDATION.md](VALIDATION.md)。
+知乎新域名的真实授权已于 2026-09-13 由开发者本人完成，并确认新站显示「知乎已连接」；验收记录见 [VALIDATION.md](VALIDATION.md)。
