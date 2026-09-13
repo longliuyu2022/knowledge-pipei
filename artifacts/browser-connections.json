@@ -1,82 +1,82 @@
 {
   "suite": "connections",
   "status": "passed",
-  "startedAt": "2026-09-13T01:48:22.406Z",
+  "startedAt": "2026-09-13T02:41:21.932Z",
   "checks": [
     {
       "label": "两个独立浏览器身份，隔离 SQLite 且模型与知乎外部能力关闭",
       "status": "passed",
-      "elapsedMs": 211
+      "elapsedMs": 100
     },
     {
       "label": "未公开画像互不可见；真实匹配页不混入体验人物",
       "status": "passed",
-      "elapsedMs": 1387
+      "elapsedMs": 1395
     },
     {
       "label": "伙伴明确公开后由 SSE 出现在真实匹配；我的画像仍保持私密",
       "status": "passed",
-      "elapsedMs": 117
+      "elapsedMs": 132
     },
     {
       "label": "真实伙伴详情、规则来源、四项评分与雷达；破冰仅在点击后生成",
       "status": "passed",
-      "elapsedMs": 1391
+      "elapsedMs": 928
     },
     {
       "label": "明确点击加入匹配并发送邀请才公开本人；收件人实时收到真实邀请",
       "status": "passed",
-      "elapsedMs": 1952
+      "elapsedMs": 1207
     },
     {
       "label": "婉拒邀请后双方待处理列表同步移除，未产生可访问的对话",
       "status": "passed",
-      "elapsedMs": 399
+      "elapsedMs": 383
     },
     {
       "label": "再次邀请并由另一身份接受；双方通过 SSE 获得空白真实会话",
       "status": "passed",
-      "elapsedMs": 2039
+      "elapsedMs": 1957
     },
     {
       "label": "空白消息禁发；双方真实发送与 SSE 同步，Enter 发送及 Shift+Enter 换行",
       "status": "passed",
-      "elapsedMs": 1165
+      "elapsedMs": 1041
     },
     {
       "label": "快速连续点击发送只产生一次请求与一条持久化消息",
       "status": "passed",
-      "elapsedMs": 396
+      "elapsedMs": 386
     },
     {
       "label": "模拟消息已落库但响应丢失：保留草稿并以同一 UUID 重试，不重复落库或显示",
       "status": "passed",
-      "elapsedMs": 892
+      "elapsedMs": 786
     },
     {
       "label": "发送响应延迟时继续编辑，成功后保留新草稿；切换连接标签和刷新列表不丢草稿",
       "status": "passed",
-      "elapsedMs": 935
+      "elapsedMs": 958
     },
     {
       "label": "桌面聊天截图，390px 手机无横向溢出且往返对话列表保留草稿",
       "status": "passed",
-      "elapsedMs": 933
+      "elapsedMs": 922
     },
     {
       "label": "浏览器整页刷新后已发送消息仍持久化，两方读取相同消息历史",
       "status": "passed",
-      "elapsedMs": 775
+      "elapsedMs": 744
     },
     {
       "label": "超过 100 条真实库消息按 before 分页读取，补齐历史且无重复",
       "status": "passed",
-      "elapsedMs": 723
+      "elapsedMs": 834
     },
     {
       "label": "屏蔽需明确确认，双方通过 SSE 移除连接并禁止访问原会话、画像和匹配",
       "status": "passed",
-      "elapsedMs": 560
+      "elapsedMs": 460
     },
     {
       "label": "全流程没有浏览器外部网络请求或虚构消息",
@@ -109,5 +109,5 @@
     "connections-desktop.png",
     "connections-mobile.png"
   ],
-  "finishedAt": "2026-09-13T01:48:37.226Z"
+  "finishedAt": "2026-09-13T02:41:35.337Z"
 }

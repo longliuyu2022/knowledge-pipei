@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, ArrowUpRight, Check, ChevronRight, Compass, Fingerprint, Info, Menu, MessagesSquare, Network, RefreshCw, Search, ShieldCheck, Sparkles, X } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, Check, ChevronRight, Compass, Fingerprint, Info, Menu, MessagesSquare, Network, Orbit, RefreshCw, Search, ShieldCheck, Sparkles, X } from 'lucide-react';
 import { api, messageOf, setCSRF } from './api';
 import { Avatar, Empty, HeroArt, Logo, MatchCard, PoolToggle, Radar, SourceBadge, Spinner } from './components';
 import { ProfileWizard } from './ProfileWizard';
@@ -7,12 +7,15 @@ import { ProfilePage } from './ProfilePage';
 import { ImportDialog, LoginDialog, SettingsDialog } from './AccountDialogs';
 import { MatchDialog } from './MatchDialog';
 import { ConnectionsPage } from './ConnectionsPage';
+import { PairingPage } from './PairingPage';
 import { StarMap } from './StarMap';
 import { TOPICS } from '../shared/catalog';
 import type { Bootstrap, Match, Mode, Page, PageActions, Pool } from './types';
+import './pairing-entry.css';
 
 const navigation = [
   { id: 'discover' as Page, label: '发现同频', icon: Compass },
+  { id: 'pairing' as Page, label: '灵魂匹配', icon: Orbit },
   { id: 'profile' as Page, label: '我的知识人格', icon: Fingerprint },
   { id: 'graph' as Page, label: '同频星图', icon: Network },
   { id: 'connections' as Page, label: '我的连接', icon: MessagesSquare },
@@ -27,6 +30,7 @@ export default function App() {
   const [mobileMenu, setMobileMenu] = useState(false);
   const [modal, setModal] = useState<Modal>(null);
   const [selected, setSelected] = useState<Match | null>(null);
+  const [conversationToOpen, setConversationToOpen] = useState<{ userId: string; id: string } | null>(null);
   const [pool, setPool] = useState<Pool>('demo');
   const [tab, setTab] = useState<'recommended' | 'complement' | 'saved'>('recommended');
   const [query, setQuery] = useState(''), [topic, setTopic] = useState('all');
@@ -63,7 +67,9 @@ export default function App() {
     let timer: ReturnType<typeof setTimeout> | null = null;
     const changed = () => { if (timer) clearTimeout(timer); timer = setTimeout(() => refresh().catch(() => {}), 220); };
     const newPool = () => setVersion(v => v + 1);
+    const pairingChanged = () => window.dispatchEvent(new Event('tongpin:pairing'));
     events.addEventListener('changed', changed); events.addEventListener('pool', newPool);
+    events.addEventListener('pairing', pairingChanged); events.addEventListener('open', pairingChanged);
     return () => { if (timer) clearTimeout(timer); events.close(); };
   }, [data?.user.id, refresh]);
   useEffect(() => {
@@ -84,6 +90,12 @@ export default function App() {
     else location.hash = next;
     setMobileMenu(false);
   }, [changePool]);
+  const openConversation = useCallback((id: string) => {
+    if (!data) return;
+    setConversationToOpen({ userId: data.user.id, id });
+    setSelected(null); setModal(null); navigate('connections');
+  }, [data?.user.id, navigate]);
+  const conversationOpened = useCallback(() => setConversationToOpen(null), []);
   const open = (next: Modal) => { setSelected(null); setModal(next); setMobileMenu(false); };
   const onSave = async (match: Match) => {
     if (!data || savingIds.has(match.id)) return;
@@ -106,7 +118,7 @@ export default function App() {
   const actions: PageActions = { data, refresh, notify, onCreate: () => open('wizard'), onLogin: () => open('login'), onImport: () => open(data.zhihuConnected ? 'import' : 'login'), onSelect: match => { setModal(null); setSelected(match); }, onSave, navigate };
   const profile = data.profile || data.sampleProfile;
   const activeNavigation = navigation.find(item => item.id === page)!;
-  const reset = async () => { setSelected(null); setModal(null); setPool('demo'); setQuery(''); setTopic('all'); setTab('recommended'); await refresh(); navigate('discover'); };
+  const reset = async () => { setSelected(null); setModal(null); setConversationToOpen(null); setPool('demo'); setQuery(''); setTopic('all'); setTab('recommended'); await refresh(); navigate('discover'); };
   return <div className="app-shell">
     {mobileMenu && <button className="sidebar-scrim" aria-label="关闭导航" onClick={() => setMobileMenu(false)}/>}
     <aside className={`sidebar ${mobileMenu ? 'sidebar-open' : ''}`}>
@@ -122,6 +134,7 @@ export default function App() {
         {page === 'discover' && <>
           <div className="welcome-row"><p className="eyebrow">A LITTLE CURIOSITY, A NEW CONNECTION</p><span>从一个好问题，认识一个新朋友</span></div>
           <section className="hero"><div className="hero-copy"><div className="hero-pill"><span/>让知识，成为相遇的引力</div><h1>总有人，<br className="hero-mobile-break"/>和你<span>想到一起。</span></h1><p>藏在收藏夹里的热爱，值得被另一个人看见。<br/>发现你的知识人格，遇见聊得来的知识伙伴。</p><div className="hero-actions"><button className="button dark" onClick={actions.onCreate}>{data.profile ? '更新我的知识人格' : '发现我的知识人格'}<ArrowUpRight size={17}/></button><span>{data.profile ? '好奇心变了，画像也可以更新' : '从 3 个兴趣开始 · 约 1 分钟'}</span></div></div><HeroArt/></section>
+          <section className="pairing-launch" aria-label="主动匹配在线伙伴"><span className="pairing-launch-icon"><Orbit size={26} strokeWidth={1.5}/></span><div><h2>此刻，遇见一个在线的同频人</h2><p>点击开始，等待彼此都愿意开启的一场对话。</p></div><button className="button primary" onClick={() => navigate('pairing')}>开始灵魂匹配<ArrowRight size={16}/></button></section>
           <div className="discovery-layout"><section className="recommendations" aria-label="伙伴推荐">
             <div className="section-heading"><div><h2>遇见，另一个好奇的灵魂<span className="heading-dot"/></h2><p>{data.profile ? '循着你的兴趣，发现有话可聊的人。' : '先用一份体验画像，感受知识相遇的方式。'}</p></div><button className="text-button subtle" onClick={() => setVersion(v => v + 1)} disabled={matchLoading}><RefreshCw size={14} className={matchLoading ? 'spin' : ''}/><span className="desktop-text">刷新</span></button></div>
             <div className="recommendation-toolbar"><div className="recommendation-tabs" aria-label="推荐方式"><button className={tab === 'recommended' ? 'active' : ''} aria-pressed={tab === 'recommended'} onClick={() => setTab('recommended')}>为你推荐</button><button className={tab === 'complement' ? 'active' : ''} aria-pressed={tab === 'complement'} onClick={() => setTab('complement')}>互补视角</button><button className={tab === 'saved' ? 'active' : ''} aria-pressed={tab === 'saved'} onClick={() => setTab('saved')}>已收藏</button></div><PoolToggle value={pool} onChange={changePool}/></div>
@@ -137,13 +150,14 @@ export default function App() {
           </aside></div>
         </>}
         {page === 'profile' && <ProfilePage actions={actions}/>}
+        {page === 'pairing' && <PairingPage key={data.user.id} actions={actions} onConnected={openConversation}/>}
         {page === 'graph' && <StarMap profile={profile} matches={allMatches} onSelect={actions.onSelect} preview={!data.profile} pool={pool} onPoolChange={changePool} loading={matchLoading} onCreate={actions.onCreate}/>}
-        {page === 'connections' && <ConnectionsPage actions={actions} version={version}/>}
+        {page === 'connections' && <ConnectionsPage actions={actions} version={version} requestedConversationId={conversationToOpen?.userId === data.user.id ? conversationToOpen.id : undefined} onConversationOpened={conversationOpened}/>}
         <footer className="page-footer"><span>同频 · 知乎灵魂对对碰</span><span>共同的好奇心，比相同的答案更珍贵。</span><span>知乎黑客松 2026 参赛作品</span></footer>
       </main>
     </div>
     <nav className="mobile-bottom-nav" aria-label="快捷导航">{navigation.map(item => <a key={item.id} href={`#${item.id}`} className={page === item.id ? 'active' : ''}><item.icon size={20}/><span>{item.label.replace('我的', '')}</span>{item.id === 'connections' && data.incomingCount > 0 && <i/>}</a>)}</nav>
-    {modal === 'wizard' && <ProfileWizard data={data} onClose={() => setModal(null)} onComplete={async () => { await refresh(); setModal(null); navigate('profile'); }} notify={notify}/>}
+    {modal === 'wizard' && <ProfileWizard data={data} onClose={() => setModal(null)} onComplete={async () => { await refresh(); setModal(null); navigate(page === 'pairing' ? 'pairing' : 'profile'); }} notify={notify}/>}
     {modal === 'login' && <LoginDialog actions={actions} onClose={() => setModal(null)}/>}
     {modal === 'import' && <ImportDialog actions={actions} onClose={() => setModal(null)}/>}
     {modal === 'settings' && <SettingsDialog actions={actions} onClose={() => setModal(null)} onReset={reset}/>}

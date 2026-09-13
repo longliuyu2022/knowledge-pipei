@@ -15,6 +15,8 @@ HTTPS 443 · Caddy
 
 源码目录：`/root/xiangmu/fanganer`。私有配置：`.env.local`，权限 `0600`。数据库及其 WAL 位于 `data/`，不进入代码仓库。systemd 使用严格只读的程序目录和可写数据目录，自动重启与开机启动。
 
+知乎 App Key 和 Access Secret 单独使用 systemd Credentials：仓库外的 `/etc/soulmatch/` 保存 `0600` 凭证文件，`soulmatch.service.d/zhihu.conf` 通过 `LoadCredential` 挂载给服务。代码从 `CREDENTIALS_DIRECTORY` 读取，也支持显式的 `ZHIHU_OAUTH_APP_KEY_FILE` / `ZHIHU_ACCESS_SECRET_FILE`。公开 App ID 与回调从 `hackathon.config.json` 读取。参见 [凭证模板](../deploy/zhihu-credentials.conf.example) 与 [官方 Skill 初始化记录](ZHIHU_SETUP.md)。
+
 ## 安装与启动
 
 在目标服务器修改 [服务模板](../deploy/soulmatch.service) 中的绝对路径，确保 Node 22.13+ 可用。安装依赖并构建，再创建数据目录、安装 service 并启动：
@@ -56,6 +58,7 @@ node scripts/verify-live.mjs
 
 - SQLite 单实例持久化，备份时使用 SQLite 在线备份或先停止服务再复制数据库及相关 WAL；不要仅复制正在写入的主文件。
 - OAuth Token 留在进程内存，重启后用户需要主动重连，已保存的应用画像与聊天仍存在。
+- 在线配对队列留在当前进程，重启后需要用户重新点击开始；已经双向确认的连接和消息持久保存。前端每 10 秒发心跳，45 秒无心跳退出，单轮排队上限 3 分钟，候选确认上限 60 秒。
 - 开启知乎前登记准确回调地址；平台必须可靠回传 state，否则保持拒绝登录。
 - 多实例运行需要将 Token、限流、实时事件和会话迁移至共享存储。
 - 如需下线，仅停止 `soulmatch` 并移除这一条 Caddy import；不修改其他站点配置。

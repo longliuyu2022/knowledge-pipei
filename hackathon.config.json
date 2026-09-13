@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "projectName": "同频 · 知乎灵魂对对碰",
+  "projectSlug": "tongpin",
+  "host": "127.0.0.1",
+  "port": 3022,
+  "oauth": {
+    "enabled": true,
+    "appId": "400",
+    "redirectUri": "https://zhihupipei.aiimage.icu/auth/callback"
+  }
+}

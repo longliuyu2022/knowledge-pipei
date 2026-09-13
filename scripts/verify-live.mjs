@@ -53,7 +53,8 @@ async function modelAction(kind, pathPattern, action) {
   assert.equal(response.status(), 200, `${kind} endpoint must succeed`);
   const body = await response.json();
   const mode = kind === 'profile' ? body.profile.analysis.mode : body.mode;
-  report.modelCalls.push({ kind, mode, elapsedMs: Date.now() - started });
+  const notice = kind === 'profile' ? body.profile.analysis.notice : body.notice;
+  report.modelCalls.push({ kind, mode, elapsedMs: Date.now() - started, ...(mode !== 'model' && notice ? { fallbackNotice: sanitize(notice) } : {}) });
   save();
   assert.equal(mode, 'model', `${kind} must use the configured live model`);
   return body;
@@ -162,6 +163,12 @@ try {
   await check('真实模型生成三种破冰问题，没有伪造知乎来源', async () => {
     const dialog = page.getByRole('dialog');
     const result = await modelAction('icebreakers', /^\/api\/people\/[^/]+\/icebreakers$/, () => dialog.getByRole('button', { name: '生成破冰问题', exact: true }).click());
+    report.zhihuSearch = {
+      enabled: initial.capabilities.zhihuSearch,
+      returnedSourceCount: result.sources.length,
+      referencedSourceCount: result.sourceIds.length,
+      notice: result.sourceNotice ? sanitize(result.sourceNotice) : null,
+    };
     assert.equal(result.questions.length, 3);
     assert.ok(result.sourceIds.every(id => result.sources.some(item => item.id === id)));
     assert.ok(result.questions.every(question => !/https?:\/\//i.test(question)));

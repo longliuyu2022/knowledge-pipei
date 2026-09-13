@@ -32,6 +32,51 @@ Node.js 22.13+、Express 5、SQLite。生产环境由同一个服务提供前端
 
 匹配指数不是关系成功概率。每个结果的 `breakdown` 包含百分制 `value` 与 `weight`，权重合计 100，显示分数严格等于 `round(sum(value × weight) / 100)`。同频模式综合知识领域、具体兴趣、交流节奏和期待；互补模式保留共同兴趣作为讨论起点，再衡量新视角。`algorithm` 明确标记当前使用的 `topics` 或 `embedding`。伙伴详情与连接列表使用可解释的主题计算；发现列表在可选向量服务成功时使用 embedding。
 
+## 手动在线配对
+
+发现页的推荐列表是浏览功能；在线配对必须由用户主动点击开始。只有已经生成画像、主动入队且持续在线的真实参与者才会成为候选，不从体验池补人。点击开始仅同意向本次配对的另一方临时展示公开画像字段，不会设置 `discoverable=true` 或让第三人查看私有画像。
+
+| 方法与路径 | JSON 输入 | 行为 |
+| --- | --- | --- |
+| `GET /api/pairing` | 无 | 读取本人当前状态，不入队、不续在线时间；忽略第三人身份查询参数 |
+| `POST /api/pairing/start` | `{revision, mode?, topic?}` | 以当前画像版本开始一轮；mode 默认为 `resonance`，可选 `complement` |
+| `POST /api/pairing/heartbeat` | 可选 `{attemptId}` | 仅为当前仍有效的排队/候选状态续在线时间 |
+| `POST /api/pairing/respond` | `{pairId, decision:"accept"\|"skip"}` | 确认对话或换一位；双方确认前不会创建聊天邀请 |
+| `POST /api/pairing/cancel` | 可选 `{attemptId}` | 停止当前未完成的匹配；在已连接状态只收起结果，不删除已有对话 |
+
+以上接口均返回相同结构，修改接口沿用本站会话、来源和 CSRF 校验：
+
+```json
+{
+  "status": "idle | searching | proposed | connected",
+  "attemptId": "本轮 UUID 或 null",
+  "mode": "resonance | complement",
+  "topic": null,
+  "expiresAt": null,
+  "heartbeatExpiresAt": null,
+  "pair": null,
+  "conversationId": null,
+  "reason": null,
+  "notice": null
+}
+```
+
+`pair` 非空时为 `{id, person, acceptedByMe, acceptedByOther}`。`person` 是完整的 Match（含 `saved`、`reasons`、`breakdown`），只包含当次另一方，不包含原始导入依据、第三人或队列名单。候选页面可直接展示该对象，普通 `/api/people/:id` 不因排队而开放私密画像。私密候选的屏蔽操作额外允许当前相互配对的双方使用原 `/api/blocked/:id`。
+
+`searching` 的 `expiresAt` 是本轮开始后三分钟；`proposed` 时是候选产生后六十秒。两种状态都要求每 8–12 秒调用心跳，连续 45 秒未收到则退出。GET 不续期，迟到心跳也不会重新入队；用户需再次主动开始。定时清理默认每五秒运行，所有状态请求同时检查准确截止时间。确认超时或对方离开后，仍在线的一方可在原三分钟期限内继续寻找；原期限已结束则回到 idle。
+
+进行中的相同 start 幂等，不刷新三分钟期限；更换 mode/topic 返回 409 `pairing_active`，需要先取消。topic 接受目录中的兴趣 ID，`null`、省略、空字符串或 `all` 表示不限；候选必须同时满足双方各自的筛选。优先处理较早入队者，再从合格候选中选择双方各自模式下平均指数更高的人。在线配对使用主题计算，不调用模型或 embedding。
+
+双方点击 accept 后，后端在事务内创建一条既有邀请结构的 accepted 连接，`conversationId` 可直接用于原聊天接口。相同确认重试返回同一连接。skip 让双方继续排队；skip、取消、掉线及确认超时都会让这对人避让五分钟，避免马上再次相遇。仍在短期缓存中的旧 pairId，其迟到重试只返回本人的最新状态，不操作新的候选；他人、未知或缓存已清除的 pairId 返回 404。已接受连接、已有待处理邀请及双向屏蔽的两人不能再次配为候选。
+
+客户端应在 heartbeat/cancel 中携带收到的 `attemptId`；与当前轮次不符时只返回当前状态，不续在线或取消新轮次。离开页面时停止心跳即可，避免卸载请求取消另一标签页新开的轮次。每人同一时刻只能有一组候选；换人和确认都是同步状态转移，不会同时分配给多人。
+
+退出登录、切换身份、删除账号、开始重建/导入/清除画像以及主动退出发现会立即撤销未完成配对。屏蔽会结束对应候选或已建连接的访问。已接受聊天保存在 SQLite；排队、候选与十分钟内的幂等结果只在单进程内存保存，服务重启后要主动重新开始。新 start 可以覆盖本人已连接的展示状态，已有聊天继续保留。
+
+状态改变向相关两方发送 SSE `pairing` 和 `changed`，事件数据固定为 `{}`，前端再读取本人状态。无相应画像返回 400 `profile_required`，版本过期返回 409 `profile_changed`，画像正在更新返回 409 `profile_busy`，无权或未知配对返回 404 `pairing_missing`。`reason` 的 idle 原因包括 `cancelled`、`offline`、`queue_expired`、`profile_changed`、`account_changed`、`blocked`、`person_unavailable`；继续排队的原因包括 `skipped`、`peer_skipped`、`peer_left`、`proposal_expired`、`pair_unavailable`。notice 提供可直接展示的中文说明。
+
+每用户 start 每分钟最多 12 次，heartbeat/respond 各最多 30 次。单进程最多容纳 200 位进行中的参与者，满员返回 429 `pairing_full`。自动化测试可通过 `createApp(config, {pairingOptions:{now, offlineMs, queueMs, proposalMs, sweepMs}})` 注入时钟与期限，生产环境不提供修改时间的 HTTP 接口。
+
 ## 邀请、对话与屏蔽
 
 | 方法与路径 | 输入 | 返回与行为 |
@@ -52,6 +97,7 @@ Node.js 22.13+、Express 5、SQLite。生产环境由同一个服务提供前端
 | 方法与路径 | 输入 | 返回与行为 |
 | --- | --- | --- |
 | `POST /api/auth/zhihu/start` | 空对象 | `{url}`；由浏览器跳转到知乎完成本人授权 |
+| `GET /auth/callback` | OAuth 原始 Query | `302` 原样转发 Query 至下方内部回调，兼容赛事生成器要求的路径后缀 |
 | `GET /api/auth/zhihu/callback` | `state` 和 `authorization_code` 或 `code` | 跳回 `/?auth=success\|failed\|state_error\|cancelled#profile` |
 | `POST /api/zhihu/import` | `{sources:["contents"\|"followees"\|"collections"], useAI?}` | `{count, counts, profile}`；仅用户主动勾选的来源，每类最多 10 项 |
 | `DELETE /api/zhihu/import` | 空对象 | `{profile}`；清除导入、重新构建画像并清除当前 OAuth Token |
@@ -61,6 +107,8 @@ Node.js 22.13+、Express 5、SQLite。生产环境由同一个服务提供前端
 | `GET /api/events` | EventSource 携带 Cookie | SSE 事件 `changed`、`pool`，25 秒心跳；用于触发界面刷新 |
 
 OAuth state 十分钟有效且只能使用一次。`/access_token` 使用表单交换，`/user` 仅发送用户 OAuth Bearer Token；创作摘要、关注及收藏列表同时发送应用 Access Secret、用户 `X-OAuth-Token` 和秒级时间戳。大整数 uid 从 JSON 解析开始无损保留，未获取有效身份时不创建登录身份。
+
+赛事登记可使用 `https://zhihupipei.aiimage.icu/auth/callback`。公开入口不交换 Token、不放宽 state 校验、不记录 Query，只作不可缓存的本站跳转；浏览器到达 `/api/auth/zhihu/callback` 后仍需原会话、一次性 state 和 `/api/auth/zhihu` 路径下的 OAuth Cookie。缺失或不匹配继续返回 `state_error`。
 
 OAuth Token 保存在服务端内存中，进程重启后需重新连接；不会下发到前端。Token 过期或鉴权错误时停止数据读取，保留已有应用身份，不退回应用开发者本人数据。请求频率或配额错误不撤销用户身份。搜索引用仅使用知乎返回的标题、摘要和官方 HTTPS 链接，不将摘要当全文。
 

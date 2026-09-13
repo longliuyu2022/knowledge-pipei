@@ -4,7 +4,7 @@
 
 运行 `npm test` 使用 Node.js 原生测试框架。API 测试启动临时端口，数据库使用独立的 `:memory:`；迁移测试仅在系统临时目录创建数据库并在结束后移除。测试不会加载 `.env.local`、调用真实模型/知乎或读写生产 `data/`。
 
-2026-09-13 最终完整复核结果：39 项通过、0 失败、0 跳过，总耗时约 3.75 秒。Node.js 当前会为 `node:sqlite` 显示实验性提示，未影响运行和结果。
+2026-09-13 完整复核结果：58 项通过、0 失败、0 跳过，总耗时约 4.4 秒。Node.js 当前会为 `node:sqlite` 显示实验性提示，未影响运行和结果。
 
 验证范围：
 
@@ -12,28 +12,34 @@
 - 来源、跨站请求、CSRF、Unicode 非法凭证、缺失/错误 JSON、画像字段及版本冲突。
 - 新画像默认私有、重建需要新的公开确认、旧待处理邀请取消、开关不修改画像版本。
 - 真实匹配空池、体验人物标识与禁止邀请；分数范围、可复算的权重、互补的新视角、关键词误匹配和大数向量稳定性。
+- 主动在线配对只使用等待中的真实用户；不公开私密画像，候选只供双方查看，第三方不能确认或访问。
+- 同时开始不重复分配；双方确认才建立一条持久聊天；取消、换人、掉线、排队与确认超时、屏蔽和画像变更均正确释放候选。
+- 旧 `attemptId` / `pairId` 不影响新轮次；已经建立的聊天不随队列变化失效。
 - 双用户邀请、仅接收人处理、接受前禁止聊天、第三方读写拒绝、稳定消息分页。
 - 消息重试幂等、冲突正文、非法 UUID、作者隔离、无重试 ID 的旧客户端兼容，以及 SQLite 旧消息表迁移/重启后去重。
 - 双向屏蔽、取消连接、解除屏蔽不恢复授权、删除个人记录及邀请/消息级联。
 - OAuth 表单交换、用户接口和业务接口的双凭证区别、64 位 uid 无损解析、历史成功码、无身份响应拒绝。
 - OAuth 一次性 state、浏览器和原会话绑定、十分钟过期、成功后会话轮换、登录期间退出后不会被迟到响应恢复。
+- 公网 `/auth/callback` 将原始参数交给既有回调处理；保留 Cookie 路径与全部授权校验。
+- 公开项目配置、环境覆盖优先级、服务端凭证文件错误处理，以及 capabilities 不返回密钥。
 - Token 缺失/过期/鉴权失败停止读取；频率与日配额错误保留身份，不读取开发者账号数据。
 - 最小范围的选择性导入、缓存并发去重、授权撤回后不重新写入旧结果。
 - 模型 JSON/schema 和证据 ID/搜索引用验证，失败原因明确的规则降级。
 - 文本模型和向量共用 5 RPM/2 并发限制；向量去重、格式校验及实际算法标识。
 - HTTPS Secure Cookie、未配置 OAuth 时的可控响应、API 限流的 Retry-After。
 
-测试文件：`tests/api.test.js`、`tests/ai.test.js`、`tests/matching.test.js`、`tests/zhihu.test.js`、`tests/store.test.js`。
+测试文件：`tests/api.test.js`、`tests/ai.test.js`、`tests/matching.test.js`、`tests/pairing.test.js`、`tests/zhihu.test.js`、`tests/config.test.js`、`tests/store.test.js`。
 
 ## 浏览器完整流程
 
-2026-09-13 09:48（Asia/Shanghai），生产构建通过 TypeScript 检查后运行 `npm run test:browser`，三个套件共 42 项全部通过，耗时约 50 秒。使用真实 Chromium、独立测试服务和临时 SQLite；关闭模型和知乎网络调用，不触碰正式用户数据。
+2026-09-13 10:40（Asia/Shanghai），生产构建通过 TypeScript 检查后运行 `npm run test:browser`，四个套件共 59 项全部通过，耗时约 66.7 秒。使用真实 Chromium、独立测试服务和临时 SQLite；关闭模型和知乎网络调用，不触碰正式用户数据。
 
 | 套件 | 检查数 | 重点 |
 | --- | --- | --- |
 | 发现与星图 | 11 | 筛选、重复切换当前池、互补推荐、收藏、详情与复制、图谱缩放、真实池空态、手机布局 |
 | 知识画像 | 14 | 三步创建、兴趣范围、私有与公开切换、编辑持久化、PNG/JSON 下载、删除、390px/320px 手机流程 |
 | 邀请与聊天 | 17 | 两个独立身份、双方同意、SSE 同步、幂等重试、草稿保护、110 条消息分页、双向屏蔽、手机输入区 |
+| 主动在线配对 | 17 | 三个独立身份、真实等待、相互配对、双方确认后直达聊天、换人、取消、迟到请求、掉线与超时、390px/320px 布局 |
 
 所有套件均无页面脚本或静态资源错误。汇总报告：[browser-suite.json](../artifacts/browser-suite.json)。各套件报告及实际截图同处于 `artifacts/`；测试身份与对话内容均为专门构造的虚构资料。
 
@@ -51,23 +57,29 @@
 
 ## 公网真实页面
 
-2026-09-13 09:45（Asia/Shanghai），运行 `node scripts/verify-live.mjs`，直接访问 `https://zhihupipei.aiimage.icu`，8 项检查全部通过。浏览器正常校验证书，使用 TLS 1.3；HTTP 跳转 HTTPS，健康接口正常。会话 Cookie 的 Secure、HttpOnly 和 SameSite=Lax 均实际验证通过。
+2026-09-13 10:51（Asia/Shanghai），运行 `node scripts/verify-live.mjs`，直接访问 `https://zhihupipei.aiimage.icu`，8 项检查全部通过。浏览器正常校验证书，使用 TLS 1.3；HTTP 跳转 HTTPS，健康接口正常。会话 Cookie 的 Secure、HttpOnly 和 SameSite=Lax 均实际验证通过。
 
 通过页面三步向导创建不公开的虚构验收画像，再打开推荐详情、生成破冰问题，共发起三次业务模型请求：
 
 | 公网流程 | 实际模式 | 本次耗时 |
 | --- | --- | --- |
-| 画像生成 | `model` | 3.65 秒 |
-| 匹配解释 | `model` | 3.35 秒 |
-| 破冰问题 | `model` | 2.70 秒 |
+| 画像生成 | `model` | 3.08 秒 |
+| 匹配解释 | `model` | 2.79 秒 |
+| 破冰问题 | `model` | 3.04 秒 |
 
-画像依据 ID 均来自实际输入，三条破冰问题没有伪造来源；当前未启用知乎搜索，来源数组为空。页面脚本与静态资源均无错误。验收账号始终未加入真实匹配池，结束后已删除。
+画像依据 ID 均来自实际输入。知乎搜索实际返回 3 条来源，破冰生成使用其中 2 条，来源 ID 均在返回集合内，问题文本没有生成 URL。页面脚本与静态资源均无错误。验收账号始终未开启全局发现，也未加入在线配对队列，结束后已删除。
+
+本轮 10:49 的首次公网检查中，匹配解释返回规则降级，因此未通过脚本要求真实模型返回的严格断言。保留了 [该次报告](../artifacts/public-validation-fallback.json)，未放宽产品的模型输出校验或测试断言；随后一次复核取得上述 8 项通过结果。模型服务异常或输出不合约时仍可能显示带原因的规则分析。
 
 脱敏报告：[public-validation.json](../artifacts/public-validation.json)。实际首页封面：[cover.png](../artifacts/cover.png)，512×512 图标：[icon.png](../artifacts/icon.png)。验证脚本不会保存 Cookie、CSRF、浏览器身份文件或原始响应正文。
 
-## 需要外部凭证的验收
+## 知乎初始化与 OAuth 验收
 
-当前未提供知乎赛事 App ID、App Key、登记回调配置及 Access Secret。OAuth 与用户数据协议已经通过 Mock 验证，但尚未完成知乎公网本人授权和真实导入。前端必须按 capabilities 展示实际可用能力；兴趣自述、真实文本分析、匹配与双方同意后的聊天可以独立使用。
+官方 Hackathon Skill 与随包知乎 Skill 已安装，官方 OAuth 参考项目的生成、doctor、静态检查、两项测试、健康与配置状态检查均已完成。App ID `400` 与公网回调 `https://zhihupipei.aiimage.icu/auth/callback` 已配置，App Key / Access Secret 通过服务器凭证文件注入。官方 CLI 的 `auth status --verify` 与一条本人创作读取成功，记录不保存原始内容。
+
+用户已亲自完成授权并确认正式网站登录成功；只读检查确认服务端已有知乎账号，未读取账号资料或凭证。测试浏览器只打开官方登录入口，没有代替用户点击授权，其报告中的 `authorized: false` 仅指该测试浏览器。
+
+创作、关注、收藏夹、收藏夹内容和近期收藏这五项 OAuth 用户接口尚未完成公网实测，不能用 CLI 的本人内容检查代替；协议、选择性导入与权限边界已有隔离测试。逐项状态及授权证据见 [知乎接入记录](ZHIHU_SETUP.md) 与 [公网授权记录](../artifacts/zhihu-public-validation.json)。
 
 可选 embedding 模型当前未配置，实际发现页使用主题向量；向量协议与降级经过 Mock 验证，不声称已接通真实 embedding。
 

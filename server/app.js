@@ -6,6 +6,7 @@ import { capabilities } from './config.js';
 import { Store } from './store.js';
 import { Intelligence } from './ai.js';
 import { Zhihu } from './zhihu.js';
+import { Pairing } from './pairing.js';
 import { AppError, fail, requiredText, optionalText } from './errors.js';
 import { buildProfile, compareProfiles, DEMO_PROFILES, SAMPLE_PROFILE } from './matching.js';
 import { TOPIC_MAP, GOALS, STYLES } from '../shared/catalog.js';
@@ -60,6 +61,7 @@ export function createApp(config, options = {}) {
     for (const res of streams.get(userId) || []) res.write(`event: ${event}\ndata: {}\n\n`);
   }
   function broadcast(event = 'pool') { for (const userId of streams.keys()) emit(userId, event); }
+  const pairing = new Pairing(store, { ...options.pairingOptions, onChange(userId) { emit(userId, 'pairing'); emit(userId); } });
   const heartbeat = setInterval(() => { for (const group of streams.values()) for (const res of group) res.write(': heartbeat\n\n'); }, 25000);
   heartbeat.unref();
   const own = req => store.profile(req.viewer.id) || SAMPLE_PROFILE;
@@ -84,6 +86,11 @@ export function createApp(config, options = {}) {
   }
 
   app.get('/api/health', (_req, res) => res.json({ status: 'ok', app: '同频 · 知乎灵魂对对碰', version: '1.0.0' }));
+  app.get('/auth/callback', (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    const queryStart = req.originalUrl.indexOf('?');
+    res.redirect(302, `/api/auth/zhihu/callback${queryStart < 0 ? '' : req.originalUrl.slice(queryStart)}`);
+  });
   app.use('/api', (req, res, next) => {
     res.set('Cache-Control', 'no-store');
     req.cookies = cookies(req.headers.cookie);
@@ -117,6 +124,22 @@ export function createApp(config, options = {}) {
     req.on('close', () => { group.delete(res); if (!group.size) streams.delete(req.viewer.id); });
   });
 
+  app.get('/api/pairing', (req, res) => res.json(pairing.state(req.viewer.id)));
+  app.post('/api/pairing/start', (req, res) => {
+    rate(`pair-start:${req.viewer.id}`, 12);
+    if (mutations.has(req.viewer.id)) fail(409, 'profile_busy', '画像正在更新，完成后再开始匹配');
+    res.json(pairing.start(req.viewer.id, req.body));
+  });
+  app.post('/api/pairing/heartbeat', (req, res) => {
+    rate(`pair-heartbeat:${req.viewer.id}`, 30);
+    res.json(pairing.heartbeat(req.viewer.id, req.body.attemptId));
+  });
+  app.post('/api/pairing/respond', (req, res) => {
+    rate(`pair-respond:${req.viewer.id}`, 30);
+    res.json(pairing.respond(req.viewer.id, req.body.pairId, req.body.decision));
+  });
+  app.post('/api/pairing/cancel', (req, res) => res.json(pairing.cancel(req.viewer.id, req.body.attemptId)));
+
   app.post('/api/profile', async (req, res) => {
     rate(`profile:${req.viewer.id}`, 8);
     const input = validateProfile(req.body.input);
@@ -125,6 +148,7 @@ export function createApp(config, options = {}) {
     const profile = await mutate(req.viewer.id, async () => {
       const current = store.profile(req.viewer.id);
       if (req.body.revision !== (current?.revision || 0)) fail(409, 'profile_changed', '画像已在其他页面更新，请刷新后再试');
+      pairing.invalidate(req.viewer.id, 'profile_changed');
       const generated = await ai.enrichProfile(buildProfile(input, store.imports(req.viewer.id).items), req.body.useAI !== false);
       return store.saveProfile(req.viewer.id, generated, req.body.revision);
     });
@@ -134,6 +158,7 @@ export function createApp(config, options = {}) {
     if (typeof req.body.discoverable !== 'boolean') fail(400, 'invalid_visibility', '请选择是否参与匹配');
     if (req.body.discoverable && req.body.revision !== store.profile(req.viewer.id)?.revision) fail(409, 'profile_changed', '画像已更新，请查看后再参与匹配');
     const profile = store.setDiscoverable(req.viewer.id, req.body.discoverable);
+    if (!req.body.discoverable) pairing.invalidate(req.viewer.id, 'cancelled');
     broadcast(); broadcast('changed'); res.json({ profile });
   });
   app.get('/api/matches', async (req, res) => {
@@ -183,11 +208,13 @@ export function createApp(config, options = {}) {
     const person = findPerson(req, requiredText(req.body.targetId, '伙伴标识', 100));
     if (person.demo) fail(400, 'demo_person', '体验人物是虚构角色，可以收藏和练习破冰；不能向其发送邀请');
     const invitationId = store.invite(req.viewer.id, person.id, requiredText(req.body.message, '邀请内容', 500, 2));
+    pairing.tick();
     emit(req.viewer.id); emit(person.id); res.status(201).json({ id: invitationId });
   });
   app.post('/api/invitations/:id/respond', (req, res) => {
     if (!['accept', 'decline'].includes(req.body.action)) fail(400, 'invalid_action', '邀请操作无效');
     const row = store.respond(req.viewer.id, req.params.id, req.body.action);
+    pairing.tick();
     emit(row.sender_id); emit(row.recipient_id); res.json({ ok: true });
   });
   app.get('/api/conversations/:id', (req, res) => {
@@ -202,12 +229,13 @@ export function createApp(config, options = {}) {
     emit(req.viewer.id); emit(result.recipientId); res.status(201).json(result.message);
   });
   app.post('/api/blocked/:id', (req, res) => {
-    findPerson(req, req.params.id);
+    if (!pairing.mayBlock(req.viewer.id, req.params.id)) findPerson(req, req.params.id);
     store.block(req.viewer.id, req.params.id);
+    pairing.blocked(req.viewer.id, req.params.id);
     emit(req.viewer.id); emit(req.params.id); broadcast(); res.json({ ok: true });
   });
   app.get('/api/blocked', (req, res) => res.json({ people: store.blocked(req.viewer.id).map(p => ({ id: p.id, name: DEMO_PROFILES.find(d => d.id === p.id)?.name || store.user(p.id)?.name || '已离开的伙伴' })) }));
-  app.delete('/api/blocked/:id', (req, res) => { store.unblock(req.viewer.id, req.params.id); emit(req.viewer.id); broadcast(); res.json({ ok: true }); });
+  app.delete('/api/blocked/:id', (req, res) => { store.unblock(req.viewer.id, req.params.id); pairing.tick(); emit(req.viewer.id); broadcast(); res.json({ ok: true }); });
 
   app.post('/api/auth/zhihu/start', (req, res) => {
     if (!config.zhihu.oauthConfigured) fail(503, 'oauth_unconfigured', '知乎登录暂未开放，你可以先用兴趣生成画像');
@@ -232,6 +260,7 @@ export function createApp(config, options = {}) {
     try {
       const connected = await zhihu.exchange(code);
       if (store.session(req.cookies.soul_session)?.user.id !== request.userId) return res.redirect('/?auth=state_error#profile');
+      pairing.forget(request.userId, 'account_changed');
       const user = store.oauthUser(request.userId, connected.identity);
       if (user.id !== request.userId && store.profile(request.userId)) store.setDiscoverable(request.userId, false);
       zhihu.setToken(user.id, connected.token, connected.expiresIn);
@@ -249,6 +278,7 @@ export function createApp(config, options = {}) {
     if (req.viewer.provider !== 'zhihu') fail(401, 'zhihu_required', '请先连接你自己的知乎账号');
     rate(`import:${req.viewer.id}`, 3);
     const result = await mutate(req.viewer.id, async () => {
+      pairing.invalidate(req.viewer.id, 'profile_changed');
       const imported = await zhihu.import(req.viewer.id, sources);
       const current = store.profile(req.viewer.id);
       let generated = null;
@@ -263,6 +293,7 @@ export function createApp(config, options = {}) {
   app.delete('/api/zhihu/import', async (req, res) => {
     await mutate(req.viewer.id, async () => {
       const current = store.profile(req.viewer.id);
+      pairing.invalidate(req.viewer.id, 'profile_changed');
       store.clearImports(req.viewer.id); ai.clearCache(); zhihu.forget(req.viewer.id);
       if (current) store.saveProfile(req.viewer.id, buildProfile(current.input), current.revision);
     });
@@ -274,6 +305,7 @@ export function createApp(config, options = {}) {
   });
   app.post('/api/logout', (req, res) => {
     if (mutations.has(req.viewer.id)) fail(409, 'profile_busy', '画像正在更新，完成后再退出');
+    pairing.forget(req.viewer.id, 'account_changed');
     if (store.profile(req.viewer.id)) store.setDiscoverable(req.viewer.id, false);
     zhihu.forget(req.viewer.id); ai.clearCache(); store.endSession(req.cookies.soul_session);
     res.clearCookie('soul_session', cookieOptions); broadcast(); broadcast('changed');
@@ -283,6 +315,7 @@ export function createApp(config, options = {}) {
   app.delete('/api/account', (req, res) => {
     if (mutations.has(req.viewer.id)) fail(409, 'profile_busy', '画像正在更新，完成后再删除');
     if (req.body.confirm !== 'delete') fail(400, 'confirmation_required', '请先确认删除你的全部数据');
+    pairing.forget(req.viewer.id, 'account_changed');
     store.deleteAccount(req.viewer.id); zhihu.forget(req.viewer.id); ai.clearCache();
     for (const [key, value] of oauthRequests) if (value.userId === req.viewer.id) oauthRequests.delete(key);
     res.clearCookie('soul_session', cookieOptions); broadcast(); broadcast('changed');
@@ -306,5 +339,5 @@ export function createApp(config, options = {}) {
     if (status === 500) console.error('Request failed:', error.name || 'Error');
     res.status(status).json({ error: { code: error instanceof AppError ? error.code : 'request_failed', message: error instanceof AppError ? error.message : status === 400 ? '请求内容无效或过大' : '服务暂时遇到问题，请稍后再试' } });
   });
-  return { app, store, ai, zhihu, close() { clearInterval(heartbeat); for (const group of streams.values()) for (const res of group) res.end(); store.close(); } };
+  return { app, store, ai, zhihu, pairing, close() { clearInterval(heartbeat); pairing.close(); for (const group of streams.values()) for (const res of group) res.end(); store.close(); } };
 }

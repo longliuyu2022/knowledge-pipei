@@ -229,3 +229,22 @@ test('HTTPS deployment issues secure cookies and disabled OAuth never calls remo
   const start = await client.request('/api/auth/zhihu/start', { method: 'POST' });
   assert.equal(start.status, 503); assert.equal(start.data.error.code, 'oauth_unconfigured'); assert.equal(calls, 0);
 });
+
+test('public /auth/callback forwards the original query and preserves strict state and browser-cookie checks', async t => {
+  let calls = 0;
+  const settings = config(); settings.zhihu.oauth.redirectUri = 'https://app.invalid/auth/callback';
+  const service = await startService(t, { config: settings, fetchImpl: async url => { calls++; return defaultFetch(url); } });
+  const client = service.client(); await client.bootstrap();
+  const started = await client.request('/api/auth/zhihu/start', { method: 'POST' });
+  const state = new URL(started.data.url).searchParams.get('state');
+  assert.equal(new URL(started.data.url).searchParams.get('redirect_uri'), 'https://app.invalid/auth/callback');
+  const query = `?authorization_code=test%2Bcode&state=${state}&unused=keep%2Bencoding`;
+  const bridge = await client.request(`/auth/callback${query}`, { headers: { cookie: `soul_session=${client.jar.get('soul_session')}` } });
+  assert.equal(bridge.status, 302); assert.equal(bridge.headers.get('location'), `/api/auth/zhihu/callback${query}`);
+  assert.equal(bridge.headers.get('cache-control'), 'no-store'); assert.equal(calls, 0);
+  const completed = await client.request(bridge.headers.get('location'));
+  assert.match(completed.headers.get('location'), /auth=success/); assert.equal(calls, 2);
+  const missing = await client.request('/auth/callback?authorization_code=test&state=missing');
+  const rejected = await client.request(missing.headers.get('location'));
+  assert.match(rejected.headers.get('location'), /auth=state_error/); assert.equal(calls, 2);
+});

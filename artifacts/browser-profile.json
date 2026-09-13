@@ -1,72 +1,72 @@
 {
   "suite": "profile",
   "status": "passed",
-  "startedAt": "2026-09-13T01:47:59.850Z",
+  "startedAt": "2026-09-13T02:40:57.426Z",
   "checks": [
     {
       "label": "体验画像明确标注，尚未创建个人资料",
       "status": "passed",
-      "elapsedMs": 639
+      "elapsedMs": 798
     },
     {
       "label": "画像向导限制 3–8 个兴趣，达到上限后可取消选择",
       "status": "passed",
-      "elapsedMs": 3503
+      "elapsedMs": 3869
     },
     {
       "label": "交流目标、文本与昵称经三步向导真实保存，规则生成正常",
       "status": "passed",
-      "elapsedMs": 1763
+      "elapsedMs": 2091
     },
     {
       "label": "个人页显示真实填写昵称与规则标签，初始不进入匹配池",
       "status": "passed",
-      "elapsedMs": 206
+      "elapsedMs": 184
     },
     {
       "label": "可在资料页显式加入匹配，并在设置中撤回",
       "status": "passed",
-      "elapsedMs": 785
+      "elapsedMs": 829
     },
     {
       "label": "编辑保留输入，重新生成会增加版本并取消公开",
       "status": "passed",
-      "elapsedMs": 1545
+      "elapsedMs": 1539
     },
     {
       "label": "刷新后昵称、画像版本与私密设置保持一致",
       "status": "passed",
-      "elapsedMs": 1696
+      "elapsedMs": 956
     },
     {
       "label": "人格卡按钮下载有效且非空的 1600×2200 PNG",
       "status": "passed",
-      "elapsedMs": 319
+      "elapsedMs": 291
     },
     {
       "label": "设置导出真实 JSON 资料，不包含 CSRF、会话或模型凭证",
       "status": "passed",
-      "elapsedMs": 628
+      "elapsedMs": 858
     },
     {
       "label": "未配置知乎时明确说明现状，并可继续编辑自己的兴趣",
       "status": "passed",
-      "elapsedMs": 684
+      "elapsedMs": 563
     },
     {
       "label": "390px 手机资料页和三步弹窗可完成操作且无横向溢出",
       "status": "passed",
-      "elapsedMs": 4041
+      "elapsedMs": 5390
     },
     {
       "label": "320px 手机资料页和三步弹窗可完成操作且无横向溢出",
       "status": "passed",
-      "elapsedMs": 3368
+      "elapsedMs": 3765
     },
     {
       "label": "删除需要填写确认，确认后清除账号与画像并进入新访客会话",
       "status": "passed",
-      "elapsedMs": 1231
+      "elapsedMs": 1291
     },
     {
       "label": "浏览器运行与静态资源无错误",
@@ -90,5 +90,5 @@
     "profile-mobile.png",
     "profile-mobile-320.png"
   ],
-  "finishedAt": "2026-09-13T01:48:21.356Z"
+  "finishedAt": "2026-09-13T02:41:20.628Z"
 }

@@ -14,6 +14,20 @@ export function loadConfig(root = projectRoot, environment = process.env) {
     catch (error) { if (error.code !== 'ENOENT') throw error; }
   }
   const env = { ...files, ...environment };
+  let project = {};
+  try { project = JSON.parse(readFileSync(resolve(root, 'hackathon.config.json'), 'utf8')); }
+  catch (error) { if (error.code !== 'ENOENT') throw new Error('hackathon.config.json 不是有效的项目配置'); }
+  const credential = (name, systemdName) => {
+    if (env[name]) return env[name];
+    const explicitFile = env[`${name}_FILE`];
+    const file = explicitFile || (env.CREDENTIALS_DIRECTORY ? resolve(env.CREDENTIALS_DIRECTORY, systemdName) : null);
+    if (!file) return '';
+    try { return readFileSync(file, 'utf8').trim(); }
+    catch (error) {
+      if (!explicitFile && error.code === 'ENOENT') return '';
+      throw new Error(`${name} 的服务端凭证文件不可读取`);
+    }
+  };
   const port = Number(env.SOUL_PORT || 3022);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('SOUL_PORT 必须是 1–65535 的整数');
   let ai = {
@@ -49,8 +63,9 @@ export function loadConfig(root = projectRoot, environment = process.env) {
   };
   embedding.configured = Boolean(embedding.key && embedding.model && /^https?:\/\//.test(embedding.baseUrl));
   const oauth = {
-    appId: env.ZHIHU_OAUTH_APP_ID || '', appKey: env.ZHIHU_OAUTH_APP_KEY || '',
-    redirectUri: env.ZHIHU_OAUTH_REDIRECT_URI || '',
+    appId: env.ZHIHU_OAUTH_APP_ID ?? (project.oauth?.enabled ? project.oauth.appId || '' : ''),
+    appKey: credential('ZHIHU_OAUTH_APP_KEY', 'zhihu_app_key'),
+    redirectUri: env.ZHIHU_OAUTH_REDIRECT_URI ?? (project.oauth?.enabled ? project.oauth.redirectUri || '' : ''),
   };
   const publicOrigin = (env.SOUL_PUBLIC_ORIGIN || '').replace(/\/$/, '');
   if (publicOrigin && !/^https?:\/\/[^/]+$/.test(publicOrigin)) throw new Error('SOUL_PUBLIC_ORIGIN 只包含协议和域名（可带端口）');
@@ -60,7 +75,7 @@ export function loadConfig(root = projectRoot, environment = process.env) {
     publicOrigin, secureCookies: publicOrigin.startsWith('https://'),
     allowedOrigins: new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`, 'http://127.0.0.1:5176', 'http://localhost:5176', publicOrigin].filter(Boolean)),
     ai, embedding,
-    zhihu: { accessSecret: env.ZHIHU_ACCESS_SECRET || '', oauth, oauthConfigured: Boolean(oauth.appId && oauth.appKey && oauth.redirectUri) },
+    zhihu: { accessSecret: credential('ZHIHU_ACCESS_SECRET', 'zhihu_access_secret'), oauth, oauthConfigured: Boolean(oauth.appId && oauth.appKey && oauth.redirectUri) },
   };
 }
 

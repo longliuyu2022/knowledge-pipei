@@ -1,0 +1,55 @@
+{
+  "checkedAt": "2026-09-13T02:29:32.691Z",
+  "status": "passed",
+  "checks": [
+    "OAuth and content credentials are enabled",
+    "Live pairing endpoint is available",
+    "Authorization URL uses App ID 400, public callback, and state",
+    "Official Zhihu sign-in page opens; final user confirmation not performed"
+  ],
+  "authorized": false,
+  "capabilities": {
+    "ai": true,
+    "embedding": false,
+    "oauth": true,
+    "zhihuData": true,
+    "zhihuSearch": true
+  },
+  "callback": "https://zhihupipei.aiimage.icu/auth/callback",
+  "authorizationPage": {
+    "httpStatus": 200,
+    "origin": "https://www.zhihu.com",
+    "path": "/signin",
+    "title": "知乎 - 有问题，就会有答案"
+  },
+  "testAccountDeleted": true,
+  "authorizationScope": "Synthetic verification browser; no final authorization click performed by automation",
+  "userLoginVerification": {
+    "checkedAt": "2026-09-13T02:52:59.546Z",
+    "userReportedLoginSucceeded": true,
+    "serverZhihuAccountEstablished": true,
+    "evidence": "Read-only account-existence check; no identities, profile contents, or credentials read"
+  },
+  "oauthUserApiValidation": {
+    "contents": {
+      "status": "pending",
+      "requestedItemCount": 0
+    },
+    "followees": {
+      "status": "pending",
+      "requestedItemCount": 0
+    },
+    "favlists": {
+      "status": "pending",
+      "requestedItemCount": 0
+    },
+    "favlist_contents": {
+      "status": "pending",
+      "requestedItemCount": 0
+    },
+    "collections": {
+      "status": "pending",
+      "requestedItemCount": 0
+    }
+  }
+}

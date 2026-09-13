@@ -1,22 +1,27 @@
 {
   "status": "passed",
-  "startedAt": "2026-09-13T01:47:47.006Z",
+  "startedAt": "2026-09-13T02:40:43.890Z",
   "suites": [
     {
       "name": "discovery",
       "status": "passed",
-      "elapsedMs": 11906
+      "elapsedMs": 12542
     },
     {
       "name": "profile",
       "status": "passed",
-      "elapsedMs": 22593
+      "elapsedMs": 24366
     },
     {
       "name": "connections",
       "status": "passed",
-      "elapsedMs": 15926
+      "elapsedMs": 14781
+    },
+    {
+      "name": "pairing",
+      "status": "passed",
+      "elapsedMs": 15017
     }
   ],
-  "finishedAt": "2026-09-13T01:48:37.431Z"
+  "finishedAt": "2026-09-13T02:41:50.599Z"
 }

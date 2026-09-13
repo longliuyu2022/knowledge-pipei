@@ -7,7 +7,7 @@ import { chromium } from 'playwright';
 import { loadConfig, projectRoot } from '../server/config.js';
 import { createApp } from '../server/app.js';
 
-export async function runBrowserSuite(name, run) {
+export async function runBrowserSuite(name, run, options = {}) {
   if (!existsSync(resolve(projectRoot, 'dist/index.html'))) throw new Error('Run npm run build before browser verification.');
   const artifactsDir = resolve(projectRoot, 'artifacts'); mkdirSync(artifactsDir, { recursive: true });
   const reportPath = resolve(artifactsDir, `browser-${name}.json`);
@@ -19,7 +19,7 @@ export async function runBrowserSuite(name, run) {
     SOUL_DB_PATH: join(directory, 'test.sqlite'), SOUL_PUBLIC_ORIGIN: '', SOUL_AI_ENABLED: 'false', SOUL_USE_LOCAL_MODEL: 'false',
     SOUL_EMBEDDING_MODEL: '', ZHIHU_ACCESS_SECRET: '', ZHIHU_OAUTH_APP_ID: '', ZHIHU_OAUTH_APP_KEY: '', ZHIHU_OAUTH_REDIRECT_URI: '',
   });
-  const service = createApp(config);
+  const service = createApp(config, options);
   const server = service.app.listen(0, '127.0.0.1'); await once(server, 'listening');
   const origin = `http://127.0.0.1:${server.address().port}`; config.allowedOrigins.add(origin);
   const executablePath = process.env.CHROMIUM_PATH || ['/usr/local/bin/chromium-browser', '/usr/bin/chromium', '/usr/bin/chromium-browser', '/usr/bin/google-chrome'].find(existsSync);

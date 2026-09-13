@@ -1,4 +1,4 @@
-export type Page = 'discover' | 'profile' | 'graph' | 'connections';
+export type Page = 'discover' | 'pairing' | 'profile' | 'graph' | 'connections';
 export type Pool = 'demo' | 'people';
 export type Mode = 'resonance' | 'complement';
 export type AnalysisMode = 'model' | 'rules';
@@ -27,6 +27,18 @@ export interface Match extends Person {
   score: number; shared: { id: string; label: string }[]; newTopics: Interest[];
   reasons: string[]; breakdown: { id: string; label: string; value: number; weight: number }[];
   matchingMode: Mode; algorithm: 'topics' | 'embedding'; saved: boolean;
+}
+export interface PairingState {
+  status: 'idle' | 'searching' | 'proposed' | 'connected';
+  attemptId: string | null;
+  mode: Mode;
+  topic: string | null;
+  expiresAt: string | null;
+  heartbeatExpiresAt: string | null;
+  pair: { id: string; person: Match; acceptedByMe: boolean; acceptedByOther: boolean } | null;
+  conversationId: string | null;
+  reason: string | null;
+  notice: string | null;
 }
 export interface Bootstrap {
   user: { id: string; name: string; provider: string; avatar: string };

@@ -141,6 +141,20 @@ export class Store {
   connectionBetween(a, b) {
     return this.db.prepare("SELECT * FROM invitations WHERE ((sender_id = ? AND recipient_id = ?) OR (sender_id = ? AND recipient_id = ?)) AND status = 'accepted' LIMIT 1").get(a, b, b, a) || null;
   }
+  activeInvitationBetween(a, b) {
+    return this.db.prepare("SELECT id, status FROM invitations WHERE ((sender_id = ? AND recipient_id = ?) OR (sender_id = ? AND recipient_id = ?)) AND status IN ('pending', 'accepted') LIMIT 1").get(a, b, b, a) || null;
+  }
+  connectPairing(pairId, a, b, revisionA, revisionB) {
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const existing = this.db.prepare("SELECT * FROM invitations WHERE id = ? AND status = 'accepted'").get(pairId);
+      if (existing && existing.sender_id === a && existing.recipient_id === b) { this.db.exec('COMMIT'); return existing.id; }
+      if (a === b || this.isBlocked(a, b) || this.profile(a)?.revision !== revisionA || this.profile(b)?.revision !== revisionB || this.activeInvitationBetween(a, b)) fail(409, 'pairing_unavailable', '配对状态已改变，请重新开始');
+      this.db.prepare("INSERT INTO invitations (id, sender_id, recipient_id, message, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'accepted', ?, ?)")
+        .run(pairId, a, b, '通过在线匹配相遇，双方已确认开始对话。', now(), now());
+      this.db.exec('COMMIT'); return pairId;
+    } catch (error) { this.db.exec('ROLLBACK'); throw error; }
+  }
   invite(senderId, recipientId, message) {
     if (senderId === recipientId) fail(400, 'self_invitation', '不能邀请自己');
     if (!this.profile(senderId)?.discoverable) fail(400, 'join_required', '先开启「让伙伴发现我」，再发送邀请');
