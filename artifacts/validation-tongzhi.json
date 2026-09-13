@@ -1,0 +1,128 @@
+{
+  "generatedAt": "2026-09-13T09:53:23.579340+00:00",
+  "version": "2.0.0",
+  "backend": {
+    "passed": 191,
+    "failed": 0
+  },
+  "browserSuites": [
+    {
+      "report": "browser-circles.json",
+      "passed": 19,
+      "total": 19,
+      "status": "passed"
+    },
+    {
+      "report": "browser-tongzhi-shell.json",
+      "passed": 13,
+      "total": 13,
+      "status": "passed"
+    },
+    {
+      "report": "browser-icebreakers.json",
+      "passed": 5,
+      "total": 5,
+      "status": "passed"
+    },
+    {
+      "report": "browser-admin-governance.json",
+      "passed": 10,
+      "total": 10,
+      "status": "passed"
+    },
+    {
+      "report": "browser-admin.json",
+      "passed": 21,
+      "total": 21,
+      "status": "passed"
+    }
+  ],
+  "productionBuild": "passed",
+  "model": {
+    "checkedAt": "2026-09-13T09:19:34.715Z",
+    "model": "deepseek-v4-flash",
+    "provider": "https://metapi.lilililwan.xyz",
+    "elapsedMs": 3392,
+    "mode": "model",
+    "validEvidence": true,
+    "realUserDataSent": false
+  },
+  "deployment": {
+    "checkedAt": "2026-09-13T09:44:42.887Z",
+    "origin": "https://zhihu.aiimage.icu",
+    "checks": [
+      {
+        "label": "HTTPS health serves merged application 2.0.0",
+        "status": "passed"
+      },
+      {
+        "label": "Main document and CSP belong to the merged app",
+        "status": "passed"
+      },
+      {
+        "label": "Referenced application assets return 200",
+        "status": "passed"
+      },
+      {
+        "label": "Configured integrations and separate secure visitor cookie",
+        "status": "passed"
+      },
+      {
+        "label": "Ordinary visitor has no admin access",
+        "status": "passed"
+      },
+      {
+        "label": "Database, environment, source and internal documents are not served",
+        "status": "passed"
+      },
+      {
+        "label": "OAuth URL uses App 400, per-request state and exact registered callback; authorization not automated",
+        "status": "passed"
+      },
+      {
+        "label": "Invalid OAuth state rejected without exchanging credentials",
+        "status": "passed"
+      },
+      {
+        "label": "Existing admin credentials work, unified statistics load, logout revokes access",
+        "status": "passed"
+      }
+    ],
+    "humanOAuth": "pending-user-confirmation",
+    "status": "passed",
+    "cleanup": "isolated visitor removed"
+  },
+  "productionBrowser": {
+    "checkedAt": "2026-09-13T09:46:15.577Z",
+    "pageErrors": [],
+    "assetErrors": [],
+    "widths": [
+      {
+        "width": 1440,
+        "body": 1440,
+        "document": 1440
+      },
+      {
+        "width": 390,
+        "body": 390,
+        "document": 390
+      },
+      {
+        "width": 320,
+        "body": 320,
+        "document": 320
+      }
+    ],
+    "status": "passed"
+  },
+  "migration": {
+    "sourceSnapshot": "2026-09-13T09:25:31Z",
+    "applied": true,
+    "users": 22,
+    "circles": 4,
+    "mappedRecords": 79,
+    "referencesChecked": 99,
+    "ok": true
+  },
+  "realOAuthNewOrigin": "awaiting developer final confirmation"
+}

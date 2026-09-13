@@ -1,7 +1,7 @@
 import express from 'express';
-import { createHash, randomBytes, scrypt, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, randomUUID, scrypt, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
-import { AppError, fail } from './errors.js';
+import { AppError, fail, requiredText } from './errors.js';
 import { DOMAINS, GOALS, STYLES, TOPICS, TOPIC_MAP } from '../shared/catalog.js';
 
 const deriveKey = promisify(scrypt);
@@ -10,7 +10,7 @@ const SESSION_MS = 8 * 60 * 60 * 1000;
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
 const MAX_SESSIONS = 2000;
 const MAX_BUCKETS = 10000;
-const COOKIE = 'soul_admin';
+const COOKIE = 'tongzhi_admin';
 const usernamePattern = /^[a-zA-Z0-9_.-]{3,64}$/;
 const tokenHash = value => createHash('sha256').update(value).digest('hex');
 const safeEqual = (a, b) => {
@@ -60,13 +60,14 @@ function interestsFrom(value) {
 }
 const profileData = "CASE WHEN json_valid(p.data) THEN p.data ELSE '{}' END";
 const topicObject = "CASE WHEN topic.type = 'object' THEN topic.value ELSE '{}' END";
-const profileColumns = `u.id, u.name, u.avatar, u.provider, u.created_at, u.registered_at, u.last_seen_at,
+const profileColumns = `u.id, u.name, u.avatar, u.provider, u.status, u.created_at, u.registered_at, u.last_seen_at,
+  (SELECT email FROM email_accounts WHERE user_id=u.id) AS email,
   p.user_id AS profile_id, p.revision, p.discoverable, p.updated_at AS profile_updated_at,
   json_extract(${profileData}, '$.title') AS profile_title,
   json_extract(${profileData}, '$.interests') AS profile_interests,
   json_extract(${profileData}, '$.analysis.mode') AS analysis_mode`;
 
-export function createAdminRouter(config, { store, pairing, onlineIds = () => new Set() }) {
+export function createAdminRouter(config, { store, pairing, matching, moderation, broadcast = () => {}, onlineIds = () => new Set() }) {
   const router = express.Router();
   const verifier = parsePasswordHash(config.admin?.passwordHash);
   const username = config.admin?.username;
@@ -145,12 +146,15 @@ export function createAdminRouter(config, { store, pairing, onlineIds = () => ne
     return online instanceof Set ? online : new Set();
   }
   function pairingStatus(id) {
+    const durable = matching?.request(id)?.status;
+    if (durable) return durable;
     const status = pairing?.states?.get(id)?.status;
     return ['searching', 'proposed', 'connected'].includes(status) ? status : 'idle';
   }
   function userRow(row, online) {
     return {
       id: row.id, name: row.name, avatar: row.avatar, provider: row.provider,
+      status: row.status, hasEmail: Boolean(row.email), emailMasked: row.email ? row.email.replace(/^(.).+(@.*)$/, '$1***$2') : null,
       createdAt: row.created_at, registeredAt: row.registered_at || null, lastSeenAt: row.last_seen_at || null,
       online: online.has(row.id),
       profile: row.profile_id ? {
@@ -208,22 +212,23 @@ export function createAdminRouter(config, { store, pairing, onlineIds = () => ne
     const now = Date.now();
     const today = new Date(now + 8 * 3600000).toISOString().slice(0, 10);
     const midnight = Date.parse(`${today}T00:00:00.000Z`);
-    const registrations = Array.from({ length: 7 }, (_, i) => ({ date: new Date(midnight - (6 - i) * 86400000).toISOString().slice(0, 10), zhihu: 0, guest: 0 }));
+    const registrations = Array.from({ length: 7 }, (_, i) => ({ date: new Date(midnight - (6 - i) * 86400000).toISOString().slice(0, 10), zhihu: 0, guest: 0, email: 0 }));
     const dayRows = store.db.prepare(`SELECT date(created_at, '+8 hours') AS date, provider, COUNT(*) AS count FROM users
       WHERE date(created_at, '+8 hours') BETWEEN ? AND ? GROUP BY date, provider`).all(registrations[0].date, today);
     for (const row of dayRows) {
       const day = registrations.find(item => item.date === row.date);
-      if (day && ['zhihu', 'guest'].includes(row.provider)) day[row.provider] = row.count;
+      if (day && ['zhihu', 'guest', 'email'].includes(row.provider)) day[row.provider] = row.count;
     }
     const counts = store.db.prepare(`SELECT COUNT(*) AS totalUsers,
       COALESCE(SUM(u.provider = 'zhihu'), 0) AS zhihuUsers, COALESCE(SUM(u.provider = 'guest'), 0) AS guestUsers,
+      (SELECT COUNT(*) FROM email_accounts) AS emailUsers, COALESCE(SUM(u.status='disabled'),0) AS disabledUsers,
       COUNT(p.user_id) AS profileUsers, COALESCE(SUM(p.discoverable = 1), 0) AS discoverableUsers
       FROM users u LEFT JOIN profiles p ON p.user_id = u.id`).get();
     const online = onlineSnapshot(), states = pairing?.states || new Map();
     const currentIds = new Set([...online, ...states.keys()].filter(id => typeof id === 'string'));
     const existing = new Set(store.db.prepare('SELECT id FROM users WHERE id IN (SELECT value FROM json_each(?))').all(JSON.stringify([...currentIds])).map(row => row.id));
     counts.onlineUsers = [...online].filter(id => existing.has(id)).length;
-    counts.newUsersToday = registrations[6].zhihu + registrations[6].guest;
+    counts.newUsersToday = registrations[6].zhihu + registrations[6].guest + registrations[6].email;
     counts.connections = store.db.prepare("SELECT COUNT(*) AS count FROM invitations WHERE status = 'accepted'").get().count;
     counts.messages = store.db.prepare('SELECT COUNT(*) AS count FROM messages').get().count;
     const queue = { searching: 0, proposed: 0 };
@@ -233,7 +238,15 @@ export function createAdminRouter(config, { store, pairing, onlineIds = () => ne
     const topicCounts = new Map(topicRows.map(row => [row.id, row.count]));
     const interests = TOPICS.map(topic => ({ id: topic.id, label: topic.label, count: topicCounts.get(topic.id) || 0 }))
       .filter(topic => topic.count > 0).sort((a, b) => b.count - a.count);
-    res.json({ generatedAt: new Date(now).toISOString(), counts: { ...counts }, pairing: queue, interests, registrations });
+    const matchStates = Object.fromEntries(store.db.prepare('SELECT status,COUNT(*) AS n FROM match_requests GROUP BY status').all().map(row => [row.status,row.n]));
+    const durable = Object.fromEntries(['searching','proposed','paused','fulfilled','cancelled','expired'].map(status => [status,matchStates[status] || 0]));
+    const circles = store.db.prepare(`SELECT (SELECT COUNT(*) FROM circle_groups) AS total,
+      (SELECT COUNT(*) FROM circle_groups g JOIN circle_rounds r ON r.id=g.current_round_id WHERE r.status NOT IN ('completed','archived','dormant')) AS active,
+      (SELECT COUNT(*) FROM circle_outcomes WHERE hidden_at IS NULL) AS outcomes,
+      (SELECT COUNT(*) FROM circle_reports WHERE status='open') AS openReports`).get();
+    const governance = store.db.prepare(`SELECT (SELECT COUNT(*) FROM moderation_cases WHERE status='pending') AS pending,
+      (SELECT COUNT(DISTINCT user_id) FROM sanctions WHERE revoked_at IS NULL AND (expires_at IS NULL OR expires_at>?)) AS restrictions`).get(new Date(now).toISOString());
+    res.json({ generatedAt: new Date(now).toISOString(), counts: { ...counts }, pairing: queue, matching: durable, circles, moderation: governance, interests, registrations });
   });
 
   router.get('/users', authenticated, (req, res) => {
@@ -244,7 +257,7 @@ export function createAdminRouter(config, { store, pairing, onlineIds = () => ne
       return value;
     };
     const provider = read('provider', 'all'), profile = read('profile', 'all'), visibility = read('visibility', 'all'), topic = read('topic', 'all');
-    if (!['all', 'zhihu', 'guest'].includes(provider) || !['all', 'ready', 'empty'].includes(profile) || !['all', 'public', 'private'].includes(visibility) || (topic !== 'all' && !TOPIC_MAP.has(topic))) fail(400, 'admin_invalid_filter', '请选择有效的用户筛选条件');
+    if (!['all', 'zhihu', 'guest', 'email'].includes(provider) || !['all', 'ready', 'empty'].includes(profile) || !['all', 'public', 'private'].includes(visibility) || (topic !== 'all' && !TOPIC_MAP.has(topic))) fail(400, 'admin_invalid_filter', '请选择有效的用户筛选条件');
     const q = read('q', '').trim();
     if (q.length > 100) fail(400, 'admin_invalid_filter', '搜索内容不能超过 100 个字符');
     const positive = (name, fallback, max) => {
@@ -254,7 +267,8 @@ export function createAdminRouter(config, { store, pairing, onlineIds = () => ne
     };
     const page = positive('page', 1, 1000000), pageSize = positive('pageSize', 20, 100);
     const filters = [], args = [];
-    if (provider !== 'all') { filters.push('u.provider = ?'); args.push(provider); }
+    if (provider === 'email') filters.push('EXISTS (SELECT 1 FROM email_accounts WHERE user_id=u.id)');
+    else if (provider !== 'all') { filters.push('u.provider = ?'); args.push(provider); }
     if (profile !== 'all') filters.push(`p.user_id IS ${profile === 'ready' ? 'NOT ' : ''}NULL`);
     if (visibility !== 'all') filters.push(visibility === 'public' ? 'p.discoverable = 1' : '(p.user_id IS NULL OR p.discoverable = 0)');
     if (topic !== 'all') {
@@ -267,7 +281,8 @@ export function createAdminRouter(config, { store, pairing, onlineIds = () => ne
         OR json_extract(${profileData}, '$.title') LIKE ? ESCAPE '\\'
         OR EXISTS (SELECT 1 FROM json_each(${profileData}, '$.interests') AS topic
           WHERE json_extract(${topicObject}, '$.id') LIKE ? ESCAPE '\\' OR json_extract(${topicObject}, '$.label') LIKE ? ESCAPE '\\'))`);
-      args.push(like, like, like, like, like);
+      filters[filters.length-1] = filters.at(-1).slice(0,-1) + " OR EXISTS (SELECT 1 FROM email_accounts WHERE user_id=u.id AND email LIKE ? ESCAPE '\\'))";
+      args.push(like, like, like, like, like, like);
     }
     const from = `FROM users u LEFT JOIN profiles p ON p.user_id = u.id${filters.length ? ` WHERE ${filters.join(' AND ')}` : ''}`;
     const total = store.db.prepare(`SELECT COUNT(*) AS count ${from}`).get(...args).count;
@@ -310,7 +325,75 @@ export function createAdminRouter(config, { store, pairing, onlineIds = () => ne
     const imports = store.db.prepare(`SELECT CASE WHEN json_valid(data) THEN
       CASE WHEN json_type(data) = 'array' THEN json_array_length(data) ELSE 0 END ELSE 0 END AS count,
       fetched_at AS fetchedAt FROM imports WHERE user_id = ?`).get(id);
-    res.json({ user, profile, zhihuValidation: store.zhihuValidation(id), activity: { ...activity, importedItems: imports?.count || 0, importedAt: imports?.fetchedAt || null } });
+    const sanctions = store.db.prepare('SELECT id,kind,reason,expires_at AS expiresAt FROM sanctions WHERE user_id=? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>?)').all(id,new Date().toISOString());
+    const circles = store.db.prepare("SELECT COUNT(*) AS n FROM circle_memberships WHERE user_id=? AND status='active' AND (expires_at IS NULL OR expires_at>?)").get(id,Date.now()).n;
+    res.json({ user, profile, zhihuValidation: store.zhihuValidation(id), activity: { ...activity, importedItems: imports?.count || 0, importedAt: imports?.fetchedAt || null }, governance: {sanctions,circles} });
+  });
+
+  router.post('/users/:id/status', authenticated, writeAccess, (req, res) => {
+    const {status} = req.body, reason = requiredText(req.body.reason, '处理原因', 500, 3);
+    if (!['active','disabled'].includes(status)) fail(400,'invalid_status','请选择停用或恢复');
+    const user = store.user(req.params.id);
+    if (!user) fail(404,'admin_user_missing','用户不存在');
+    const currentStatus = store.db.prepare('SELECT status FROM users WHERE id=?').get(user.id).status;
+    const restricted = store.db.prepare('SELECT 1 FROM sanctions WHERE user_id=? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at>?)').get(user.id,new Date().toISOString());
+    if (currentStatus === status && (status === 'disabled' || !restricted)) return res.json({ok:true});
+    const at = new Date().toISOString();
+    store.transaction(() => {
+      store.db.prepare('UPDATE users SET status=? WHERE id=?').run(status,user.id);
+      if (status === 'disabled') {
+        store.db.prepare('DELETE FROM sessions WHERE user_id=?').run(user.id);
+        store.db.prepare('UPDATE profiles SET discoverable=0 WHERE user_id=?').run(user.id);
+        store.db.prepare('INSERT INTO sanctions(id,user_id,kind,reason,created_at) VALUES (?,?,?,?,?)').run(randomUUID(),user.id,'ban',reason,at);
+      } else store.db.prepare('UPDATE sanctions SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL').run(at,user.id);
+      store.audit(username,`account:${status}`,user.id,{reason});
+      store.onUserChanged(user.id,'account_disabled');
+    });
+    broadcast('changed'); broadcast('circles');
+    res.json({ok:true});
+  });
+  const caseColumns = `m.id,m.user_id AS userId,u.name AS userName,m.scope,m.scope_id AS scopeId,m.reason,m.decision,m.status,
+    m.created_at AS createdAt,m.resolved_at AS resolvedAt,m.appeal,m.delivered`;
+  router.get('/moderation', authenticated, (req,res) => {
+    const status = req.query.status || 'pending';
+    if (!['pending','all'].includes(status)) fail(400,'invalid_status','案件筛选不正确');
+    res.json({items:store.db.prepare(`SELECT ${caseColumns} FROM moderation_cases m LEFT JOIN users u ON u.id=m.user_id ${status==='pending' ? "WHERE m.status='pending'" : ''} ORDER BY m.created_at DESC LIMIT 100`).all()});
+  });
+  router.post('/moderation/:id/open', authenticated, writeAccess, (req,res) => {
+    const reason = requiredText(req.body.reason,'复核原因',500,3);
+    const row = store.db.prepare(`SELECT ${caseColumns},m.text FROM moderation_cases m LEFT JOIN users u ON u.id=m.user_id WHERE m.id=?`).get(req.params.id);
+    if (!row) fail(404,'case_missing','审核记录不存在');
+    store.audit(username,'moderation:read',row.id,{reason});
+    // Private messages are accessible only for an existing case and an audited
+    // review, never through user search or the profile administration endpoint.
+    const context = row.scope==='conversation' ? store.db.prepare('SELECT author_id,text FROM messages WHERE conversation_id=? ORDER BY rowid DESC LIMIT 4').all(row.scopeId).reverse().map(m => ({speaker:m.author_id===row.userId ? 'subject':'other',text:m.text.slice(0,700)})) : [];
+    res.json({case:row,context});
+  });
+  router.post('/moderation/:id/review', authenticated, writeAccess, (req,res) => {
+    if (!moderation) fail(503,'moderation_unavailable','审核服务暂未启用');
+    moderation.review(req.params.id,req.body.action,username);
+    res.json({ok:true});
+  });
+  router.get('/circle-reports', authenticated, (_req,res) => {
+    store.audit(username,'circle_reports:read','pending');
+    res.json({items:store.db.prepare(`SELECT r.id,r.circle_id AS circleId,g.title AS circleTitle,r.message_id AS messageId,
+      r.reason,r.status,r.created_at AS createdAt,substr(m.text,1,2500) AS text
+      FROM circle_reports r JOIN circle_groups g ON g.id=r.circle_id JOIN circle_messages m ON m.id=r.message_id
+      WHERE r.status='open' ORDER BY r.created_at DESC LIMIT 100`).all()});
+  });
+  router.post('/circle-reports/:id/resolve', authenticated, writeAccess, (req,res) => {
+    const {action} = req.body;
+    if (!['hide','dismiss'].includes(action)) fail(400,'invalid_review','请选择隐藏或驳回');
+    const report = store.db.prepare("SELECT * FROM circle_reports WHERE id=? AND status='open'").get(req.params.id);
+    if (!report) fail(409,'report_resolved','举报不存在或已处理');
+    store.transaction(() => {
+      const at = new Date().toISOString();
+      store.db.prepare('UPDATE circle_reports SET status=?,resolved_at=? WHERE id=?').run(action==='hide'?'hidden':'dismissed',at,report.id);
+      if (action==='hide') store.db.prepare('UPDATE circle_messages SET hidden_at=? WHERE id=?').run(at,report.message_id);
+      store.audit(username,`circle_report:${action}`,report.id);
+    });
+    broadcast('circles');
+    res.json({ok:true});
   });
 
   // Always terminate here: unknown admin paths must not reach visitor middleware.

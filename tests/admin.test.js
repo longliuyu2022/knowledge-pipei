@@ -4,7 +4,9 @@ import { once } from 'node:events';
 import { randomUUID } from 'node:crypto';
 import express from 'express';
 import { createAdminRouter, hashAdminPassword } from '../server/admin.js';
-import { Store } from '../server/store.js';
+import { KnowledgeStore as Store } from '../server/knowledge-store.js';
+import { PersistentMatching } from '../server/persistent-matching.js';
+import { initializeCircles } from '../server/circles/schema.js';
 import { buildProfile } from '../server/matching.js';
 import { DEFAULT_INPUT } from '../shared/catalog.js';
 import { makeClient, startService, testConfig } from './helpers.js';
@@ -17,6 +19,8 @@ const count = (store, table) => store.db.prepare(`SELECT COUNT(*) AS count FROM 
 
 async function fixture(t, { overrides, pairing = { states: new Map() }, online = new Set() } = {}) {
   const config = configured(overrides), store = new Store(':memory:');
+  initializeCircles(store.db);
+  const matching = new PersistentMatching(store);
   const admin = createAdminRouter(config, { store, pairing, onlineIds: () => online });
   const app = express(); app.set('trust proxy', 'loopback'); app.use(express.json({ limit: '32kb' }));
   let fallthrough = 0;
@@ -25,7 +29,7 @@ async function fixture(t, { overrides, pairing = { states: new Map() }, online =
   const server = app.listen(0, '127.0.0.1'); await once(server, 'listening');
   const base = `http://127.0.0.1:${server.address().port}`; config.allowedOrigins.add(base);
   t.after(async () => {
-    admin.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); store.close();
+    admin.close(); matching.close(); server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); store.close();
   });
   return { config, store, admin, pairing, online, base, client: () => makeClient(base), get fallthrough() { return fallthrough; } };
 }
@@ -65,17 +69,17 @@ test('admin is a separate identity: ordinary and anonymous sessions cannot read 
   const normalSessionCount = count(service.store, 'sessions');
   const seen = service.store.db.prepare('SELECT last_seen_at FROM users WHERE id = ?').get(boot.user.id).last_seen_at;
   await login(admin);
-  assert.equal(admin.jar.has('soul_session'), false);
+  assert.equal(admin.jar.has('tongzhi_session'), false);
   const list = await admin.request('/api/admin/users');
   assert.equal(list.status, 200); assert.equal(list.data.total, 1);
   assert.equal(count(service.store, 'users'), 1); assert.equal(count(service.store, 'sessions'), normalSessionCount);
   assert.equal(service.store.db.prepare('SELECT last_seen_at FROM users WHERE id = ?').get(boot.user.id).last_seen_at, seen);
   assert.equal((await admin.request('/api/account/export')).status, 401);
-  const forged = service.client(); forged.jar.set('soul_admin', visitor.jar.get('soul_session'));
+  const forged = service.client(); forged.jar.set('tongzhi_admin', visitor.jar.get('tongzhi_session'));
   assert.equal((await forged.request('/api/admin/users')).status, 401);
-  const ordinaryBefore = visitor.jar.get('soul_session');
+  const ordinaryBefore = visitor.jar.get('tongzhi_session');
   await login(visitor);
-  assert.ok(visitor.jar.get('soul_session') === ordinaryBefore, 'admin login must preserve the independent visitor session');
+  assert.ok(visitor.jar.get('tongzhi_session') === ordinaryBefore, 'admin login must preserve the independent visitor session');
   await visitor.request('/api/admin/logout', { method: 'POST' });
   assert.equal((await visitor.bootstrap()).user.id, boot.user.id);
 });
@@ -97,13 +101,13 @@ test('admin cookies are scoped, private and rotated at login; prior sessions and
   const anonymous = await client.request('/api/admin/session');
   assert.equal(anonymous.data.configured, true); assert.equal(anonymous.data.authenticated, false);
   assert.equal(anonymous.data.username, null); assert.ok(anonymous.data.csrf);
-  const beforeCookie = client.jar.get('soul_admin'), beforeCsrf = client.csrf;
-  const old = service.client(); old.jar.set('soul_admin', beforeCookie); old.csrf = beforeCsrf;
+  const beforeCookie = client.jar.get('tongzhi_admin'), beforeCsrf = client.csrf;
+  const old = service.client(); old.jar.set('tongzhi_admin', beforeCookie); old.csrf = beforeCsrf;
   const authenticated = await login(client);
-  assert.ok(client.jar.get('soul_admin') !== beforeCookie, 'login rotates the opaque token');
+  assert.ok(client.jar.get('tongzhi_admin') !== beforeCookie, 'login rotates the opaque token');
   assert.ok(client.csrf !== beforeCsrf, 'login rotates CSRF');
   for (const response of [anonymous, authenticated]) {
-    const cookie = response.headers.getSetCookie().find(item => item.startsWith('soul_admin='));
+    const cookie = response.headers.getSetCookie().find(item => item.startsWith('tongzhi_admin='));
     for (const attribute of ['HttpOnly', 'SameSite=Strict', 'Path=/api/admin', 'Secure']) assert.ok(cookie.includes(attribute), `cookie needs ${attribute}`);
     assert.equal(response.headers.get('cache-control'), 'no-store');
   }
@@ -111,9 +115,9 @@ test('admin cookies are scoped, private and rotated at login; prior sessions and
   assert.equal((await old.request('/api/admin/users')).status, 401);
   assert.equal((await old.request('/api/admin/login', { method: 'POST', body: { username: 'admin', password: PASSWORD } })).status, 403);
   assert.equal((await client.request('/api/admin/logout', { method: 'POST', headers: { 'x-csrf-token': beforeCsrf } })).status, 403);
-  const stableCookie = client.jar.get('soul_admin'), stableCsrf = client.csrf;
+  const stableCookie = client.jar.get('tongzhi_admin'), stableCsrf = client.csrf;
   const refreshed = await client.request('/api/admin/session');
-  assert.ok(client.jar.get('soul_admin') === stableCookie && client.csrf === stableCsrf);
+  assert.ok(client.jar.get('tongzhi_admin') === stableCookie && client.csrf === stableCsrf);
   assert.equal(refreshed.headers.getSetCookie().length, 0); assert.equal(refreshed.data.expiresAt, authenticated.data.expiresAt);
 });
 
@@ -143,8 +147,8 @@ test('strict Origin, Fetch-Site and CSRF validation covers login and logout, inc
 
 test('logout revokes a shared browser session immediately and restarts never accept an old admin token', async t => {
   const service = await fixture(t), client = service.client(); await login(client);
-  const otherTab = service.client(); otherTab.jar.set('soul_admin', client.jar.get('soul_admin')); otherTab.csrf = client.csrf;
-  const restarted = await fixture(t), replay = restarted.client(); replay.jar.set('soul_admin', client.jar.get('soul_admin'));
+  const otherTab = service.client(); otherTab.jar.set('tongzhi_admin', client.jar.get('tongzhi_admin')); otherTab.csrf = client.csrf;
+  const restarted = await fixture(t), replay = restarted.client(); replay.jar.set('tongzhi_admin', client.jar.get('tongzhi_admin'));
   assert.equal((await replay.request('/api/admin/users')).status, 401);
   const loggedOut = await client.request('/api/admin/logout', { method: 'POST' });
   assert.equal(loggedOut.status, 200); assert.equal(loggedOut.data.authenticated, false); assert.equal(loggedOut.data.username, null);
@@ -293,7 +297,7 @@ test('admin detail exposes only the agreed profile and activity fields, includin
   const serialized = JSON.stringify([detail.data, (await client.request('/api/admin/users')).data, (await client.request('/api/admin/overview')).data]);
   for (const marker of [...markers, normalSession.token, normalSession.csrf, PASSWORD, PASSWORD_HASH]) assert.ok(!serialized.includes(marker), 'admin output must not include private source or authentication material');
   assert.deepEqual(Object.keys(detail.data.profile).sort(), ['title', 'summary', 'highlights', 'interests', 'dimensions', 'style', 'goals', 'about', 'question', 'analysisMode', 'revision', 'discoverable', 'updatedAt'].sort());
-  assert.deepEqual(Object.keys(detail.data.user).sort(), ['id', 'name', 'avatar', 'provider', 'createdAt', 'registeredAt', 'lastSeenAt', 'online', 'profile', 'pairingStatus'].sort());
+  assert.deepEqual(Object.keys(detail.data.user).sort(), ['id', 'name', 'avatar', 'provider', 'status', 'hasEmail', 'emailMasked', 'createdAt', 'registeredAt', 'lastSeenAt', 'online', 'profile', 'pairingStatus'].sort());
   const noProfile = (await client.request(`/api/admin/users/${c.id}`)).data;
   assert.equal(noProfile.profile, null); assert.equal(noProfile.user.profile, null); assert.equal(noProfile.activity.importedItems, 0);
 });
@@ -317,11 +321,11 @@ test('overview reports empty data, Shanghai join dates, real online users and pe
   const before = JSON.stringify([...pairing.states]);
   const response = await client.request('/api/admin/overview');
   assert.equal(response.status, 200);
-  assert.deepEqual(response.data.counts, { totalUsers: 5, zhihuUsers: 3, guestUsers: 2, profileUsers: 3, discoverableUsers: 1, onlineUsers: 2, newUsersToday: 1, connections: 0, messages: 0 });
+  assert.deepEqual(response.data.counts, { totalUsers: 5, zhihuUsers: 3, guestUsers: 2, emailUsers: 0, disabledUsers: 0, profileUsers: 3, discoverableUsers: 1, onlineUsers: 2, newUsersToday: 1, connections: 0, messages: 0 });
   assert.deepEqual(response.data.pairing, { searching: 1, proposed: 1 });
-  assert.deepEqual(response.data.registrations[0], { date: '2026-09-08', zhihu: 1, guest: 0 });
-  assert.deepEqual(response.data.registrations[5], { date: '2026-09-13', zhihu: 0, guest: 1 });
-  assert.deepEqual(response.data.registrations[6], { date: '2026-09-14', zhihu: 1, guest: 0 });
+  assert.deepEqual(response.data.registrations[0], { date: '2026-09-08', zhihu: 1, guest: 0, email: 0 });
+  assert.deepEqual(response.data.registrations[5], { date: '2026-09-13', zhihu: 0, guest: 1, email: 0 });
+  assert.deepEqual(response.data.registrations[6], { date: '2026-09-14', zhihu: 1, guest: 0, email: 0 });
   assert.deepEqual(Object.fromEntries(response.data.interests.map(item => [item.id, item.count])), { ai: 2, coding: 2, reading: 2 });
   const list = (await client.request('/api/admin/users')).data;
   assert.equal(list.items.find(item => item.id === a.id).online, true);

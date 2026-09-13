@@ -55,7 +55,7 @@ test('OAuth uses form exchange and the user OAuth credential for /user; business
 
 test('OAuth handles historical success codes, prefers hash identity, and rejects error or missing identity payloads', async () => {
   const hashed = new Zhihu(config(), { fetchImpl: async url => new URL(url).pathname === '/access_token' ? json({ access_token: 'test-token' }) : json({ code: 0, data: { hash_id: 'stable-hash-id', uid: 123, fullname: '<b>昵称</b>', avatar_path: 'https://evil.invalid/u.png' } }) });
-  assert.deepEqual((await hashed.exchange('code')).identity, { subject: 'stable-hash-id', name: '昵称', avatar: '' });
+  assert.deepEqual((await hashed.exchange('code')).identity, { subject: 'stable-hash-id', subjectKind: 'hash', name: '昵称', avatar: '' });
   for (const payload of [{ code: 404, data: "User don't exist" }, { data: {} }, { uid: 0 }, { uid: 'not-an-id' }]) {
     const zhihu = new Zhihu(config(), { fetchImpl: async url => new URL(url).pathname === '/access_token' ? tokenResponse() : json(payload) });
     await assert.rejects(zhihu.exchange('code'), error => error.status === 401);
@@ -125,7 +125,7 @@ test('OAuth callback requires original session, one-time state and browser cooki
   const replay = await a.request(`/api/auth/zhihu/callback?code=some-code&state=${state}`);
   assert.match(replay.headers.get('location'), /auth=state_error/);
   const again = await a.request('/api/auth/zhihu/start', { method: 'POST' });
-  b.jar.set('soul_oauth', a.jar.get('soul_oauth'));
+  b.jar.set('tongzhi_oauth', a.jar.get('tongzhi_oauth'));
   const wrongBrowser = await b.request(`/api/auth/zhihu/callback?code=some-code&state=${new URL(again.data.url).searchParams.get('state')}`);
   assert.match(wrongBrowser.headers.get('location'), /auth=state_error/); assert.equal(calls, 0);
 });
@@ -150,14 +150,14 @@ test('successful OAuth rotates sessions, imports only chosen data, and clears im
     return json({ Code: 0, Data: { Items: [{ Title: '<b>关于 AI 的提问</b>', Summary: '人工智能与学习的摘要', Url: 'https://www.zhihu.com/question/1' }] } });
   } });
   const client = service.client(); const before = await client.bootstrap(); await client.profile('我的画像');
-  const oldSession = client.jar.get('soul_session');
+  const oldSession = client.jar.get('tongzhi_session');
   const { callback } = await authorize(client);
   assert.equal(callback.status, 302); assert.match(callback.headers.get('location'), /auth=success/);
   const after = await client.bootstrap();
   assert.equal(after.user.id, before.user.id); assert.equal(after.user.provider, 'zhihu'); assert.equal(after.zhihuConnected, true);
-  assert.notEqual(client.jar.get('soul_session'), oldSession); assert.notEqual(after.csrf, before.csrf);
+  assert.notEqual(client.jar.get('tongzhi_session'), oldSession); assert.notEqual(after.csrf, before.csrf);
   assert.equal(service.store.session(oldSession), null);
-  assert.equal(service.store.db.prepare('SELECT subject FROM users WHERE id = ?').get(after.user.id).subject, '969570047710216201');
+  assert.equal(service.store.db.prepare('SELECT subject FROM users WHERE id = ?').get(after.user.id).subject, 'uid:969570047710216201');
   for (const secret of ['test-user-oauth-token', 'test-access-secret', 'test-app-key', 'private@example.invalid', 'private-phone']) assert.equal(JSON.stringify(after).includes(secret), false);
   const imported = await client.request('/api/zhihu/import', { method: 'POST', body: { sources: ['contents'], useAI: false } });
   assert.equal(imported.status, 200); assert.equal(imported.data.count, 1); assert.deepEqual(imported.data.counts, { contents: 1 });
@@ -178,9 +178,9 @@ test('OAuth upstream auth errors leave the existing session intact and import qu
     if (new URL(url).hostname === 'openapi.zhihu.com') return defaultFetch(url);
     businessCalls++; return json({ Code: 30001 });
   } });
-  const client = service.client(); const original = await client.bootstrap(); const token = client.jar.get('soul_session');
+  const client = service.client(); const original = await client.bootstrap(); const token = client.jar.get('tongzhi_session');
   assert.match((await authorize(client)).callback.headers.get('location'), /auth=failed/);
-  assert.equal(client.jar.get('soul_session'), token); assert.equal((await client.bootstrap()).user.provider, 'guest');
+  assert.equal(client.jar.get('tongzhi_session'), token); assert.equal((await client.bootstrap()).user.provider, 'guest');
   authFail = false; assert.match((await authorize(client)).callback.headers.get('location'), /auth=success/); await client.bootstrap();
   const limited = await client.request('/api/zhihu/import', { method: 'POST', body: { sources: ['contents'] } });
   assert.equal(limited.status, 429); assert.equal(limited.headers.get('retry-after'), '60');
@@ -206,7 +206,7 @@ test('logging out during OAuth exchange prevents a late response from restoring 
   release(); const response = await callback;
   assert.match(response.headers.get('location'), /auth=state_error/);
   assert.equal(service.store.user(before.user.id).provider, 'guest'); assert.equal(service.zhihu.token(before.user.id), null);
-  assert.equal(client.jar.has('soul_session'), false);
+  assert.equal(client.jar.has('tongzhi_session'), false);
 });
 
 test('signing into an existing identity selects its own data and retires the previous guest listing', async t => {
@@ -239,7 +239,7 @@ test('public /auth/callback forwards the original query and preserves strict sta
   const state = new URL(started.data.url).searchParams.get('state');
   assert.equal(new URL(started.data.url).searchParams.get('redirect_uri'), 'https://app.invalid/auth/callback');
   const query = `?authorization_code=test%2Bcode&state=${state}&unused=keep%2Bencoding`;
-  const bridge = await client.request(`/auth/callback${query}`, { headers: { cookie: `soul_session=${client.jar.get('soul_session')}` } });
+  const bridge = await client.request(`/auth/callback${query}`, { headers: { cookie: `tongzhi_session=${client.jar.get('tongzhi_session')}` } });
   assert.equal(bridge.status, 302); assert.equal(bridge.headers.get('location'), `/api/auth/zhihu/callback${query}`);
   assert.equal(bridge.headers.get('cache-control'), 'no-store'); assert.equal(calls, 0);
   const completed = await client.request(bridge.headers.get('location'));
@@ -247,4 +247,15 @@ test('public /auth/callback forwards the original query and preserves strict sta
   const missing = await client.request('/auth/callback?authorization_code=test&state=missing');
   const rejected = await client.request(missing.headers.get('location'));
   assert.match(rejected.headers.get('location'), /auth=state_error/); assert.equal(calls, 2);
+});
+
+test('verified migrated identities are selected by exact kind without merging equal raw values', async t => {
+  const service = await startService(t), store = service.store;
+  const hashUser = store.createUser('迁入的哈希身份'), uidUser = store.createUser('迁入的 UID 身份');
+  store.db.prepare('INSERT INTO identities VALUES (?,?,?,?)').run('zhihu','hash:123456',hashUser.id,new Date().toISOString());
+  store.db.prepare('INSERT INTO identities VALUES (?,?,?,?)').run('zhihu','uid:123456',uidUser.id,new Date().toISOString());
+  const a=store.createUser(),b=store.createUser();
+  assert.equal(store.oauthUser(a.id,{subjectKind:'hash',subject:'123456'}).id,hashUser.id);
+  assert.equal(store.oauthUser(b.id,{subjectKind:'uid',subject:'123456'}).id,uidUser.id);
+  assert.notEqual(hashUser.id,uidUser.id);
 });

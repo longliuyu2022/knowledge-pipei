@@ -1,10 +1,12 @@
 {
-  "name": "zhihu-soulmatch",
-  "version": "1.0.0",
+  "name": "zhihu-tongzhi",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
-  "description": "同频 · 知乎灵魂对对碰，让共同的好奇心成为相遇的起点",
-  "engines": { "node": ">=22.13.0" },
+  "description": "同知：问题型知识社群、知识画像与深入交流",
+  "engines": {
+    "node": ">=22.16.0"
+  },
   "scripts": {
     "dev": "node server/dev.js",
     "dev:web": "vite --host 127.0.0.1",
@@ -12,7 +14,8 @@
     "build": "tsc --noEmit && vite build",
     "start": "node server/index.js",
     "test": "node --test tests/*.test.js",
-    "test:browser": "node scripts/browser-verify.mjs"
+    "test:browser": "node scripts/browser-circles.mjs && node scripts/browser-tongzhi-shell.mjs && node scripts/browser-icebreakers.mjs && node scripts/browser-admin-governance.mjs && node scripts/browser-admin.mjs",
+    "verify:deployment": "node scripts/verify-deployment.mjs"
   },
   "dependencies": {
     "d3-force": "^3.0.0",

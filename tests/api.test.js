@@ -12,7 +12,7 @@ test('anonymous sessions isolate private profiles, saves and exports; cookies st
   assert.notEqual(first.user.id, second.user.id);
   assert.notEqual(first.csrf, second.csrf);
   assert.equal(first.profile, null);
-  const token = a.jar.get('soul_session');
+  const token = a.jar.get('tongzhi_session');
   const row = service.store.db.prepare('SELECT token_hash FROM sessions WHERE user_id = ?').get(first.user.id);
   assert.equal(row.token_hash, hashToken(token)); assert.notEqual(row.token_hash, token);
   const fresh = service.client();

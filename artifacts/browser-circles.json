@@ -1,0 +1,112 @@
+{
+  "suite": "circles",
+  "status": "passed",
+  "startedAt": "2026-09-13T08:59:14.449Z",
+  "checks": [
+    {
+      "label": "三个隔离身份，真实空小组列表，关闭模型与知乎外部调用",
+      "status": "passed",
+      "elapsedMs": 2168
+    },
+    {
+      "label": "模态框键盘边界与关闭后焦点恢复",
+      "status": "passed",
+      "elapsedMs": 1483
+    },
+    {
+      "label": "明确创建问题与目标，分别确认连接和 AI 权限，保留长知乎问题 ID",
+      "status": "passed",
+      "elapsedMs": 2181
+    },
+    {
+      "label": "公开邀请只显示公开概要，不自动加入或泄露发言和成员",
+      "status": "passed",
+      "elapsedMs": 1337
+    },
+    {
+      "label": "按知乎问题链接检索与本地推荐不会调用外部服务",
+      "status": "passed",
+      "elapsedMs": 315
+    },
+    {
+      "label": "24 小时加入、关闭提醒且保持私聊与 AI 未授权，人数实时同步",
+      "status": "passed",
+      "elapsedMs": 1423
+    },
+    {
+      "label": "引用回复保留原发言；按小组保存草稿，切换后不会串写",
+      "status": "passed",
+      "elapsedMs": 1126
+    },
+    {
+      "label": "网络丢失响应保留草稿，重试复用发送标识且只产生一条消息",
+      "status": "passed",
+      "elapsedMs": 500
+    },
+    {
+      "label": "讨论协助只在明确操作后运行，站内摘录展示引用与待核对状态",
+      "status": "passed",
+      "elapsedMs": 697
+    },
+    {
+      "label": "资料区区分链接与成员原文摘录；知乎查询必须主动点击",
+      "status": "passed",
+      "elapsedMs": 1699
+    },
+    {
+      "label": "手工成果保留发言与资料依据，署名核对后编辑生成新的草稿版本",
+      "status": "passed",
+      "elapsedMs": 2673
+    },
+    {
+      "label": "并发版本冲突保留编辑草稿，历史与 Markdown 导出体现服务端最新版本",
+      "status": "passed",
+      "elapsedMs": 1159
+    },
+    {
+      "label": "双方分别开放连接后发邀请；待确认邀请不打开私聊",
+      "status": "passed",
+      "elapsedMs": 1862
+    },
+    {
+      "label": "举报可由主持处理；隐藏依据后成果、版本入口和导出同步收起",
+      "status": "passed",
+      "elapsedMs": 1748
+    },
+    {
+      "label": "屏蔽成员移除可见发言并阻断连接，支持取消屏蔽",
+      "status": "passed",
+      "elapsedMs": 966
+    },
+    {
+      "label": "按阶段完成后开启新轮，历史轮次只读且保留原问题",
+      "status": "passed",
+      "elapsedMs": 2372
+    },
+    {
+      "label": "390 与 320 像素下内容不横溢，模态框可操作，桌面保留截图",
+      "status": "passed",
+      "elapsedMs": 2331
+    },
+    {
+      "label": "主动退出立即撤去成员内容与提醒；有效期到期也回到公开介绍",
+      "status": "passed",
+      "elapsedMs": 2965
+    },
+    {
+      "label": "浏览器运行与静态资源无错误",
+      "status": "passed",
+      "elapsedMs": 0
+    }
+  ],
+  "pageErrors": [],
+  "assetErrors": [],
+  "configuration": {
+    "identities": 3,
+    "database": "temporary isolated SQLite",
+    "ai": false,
+    "zhihu": false,
+    "noSeedCircles": true
+  },
+  "finishedAt": "2026-09-13T08:59:45.406Z"
+}

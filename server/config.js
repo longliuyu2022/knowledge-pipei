@@ -14,6 +14,7 @@ export function loadConfig(root = projectRoot, environment = process.env) {
     catch (error) { if (error.code !== 'ENOENT') throw error; }
   }
   const env = { ...files, ...environment };
+  for (const [key,value] of Object.entries(env)) if (key.startsWith('TONGZHI_')) env['SOUL_'+key.slice(8)] = value;
   let project = {};
   try { project = JSON.parse(readFileSync(resolve(root, 'hackathon.config.json'), 'utf8')); }
   catch (error) { if (error.code !== 'ENOENT') throw new Error('hackathon.config.json 不是有效的项目配置'); }
@@ -28,7 +29,7 @@ export function loadConfig(root = projectRoot, environment = process.env) {
       throw new Error(`${name} 的服务端凭证文件不可读取`);
     }
   };
-  const port = Number(env.SOUL_PORT || 3022);
+  const port = Number(env.SOUL_PORT || 3033);
   if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('SOUL_PORT 必须是 1–65535 的整数');
   let ai = {
     key: env.SOUL_AI_API_KEY || '', baseUrl: env.SOUL_AI_BASE_URL || '',
@@ -42,7 +43,7 @@ export function loadConfig(root = projectRoot, environment = process.env) {
       ai = { key: data.api_key, baseUrl: data.base_url, model: data.model, protocol: data.protocol || 'openai', userAgent: data.user_agent || '', source: 'local-file' };
     } catch { throw new Error('SOUL_AI_CONFIG_FILE 指向的模型配置不存在或不完整'); }
   }
-  if (!ai.key && env.SOUL_USE_LOCAL_MODEL !== 'false') {
+  if (!ai.key && env.SOUL_USE_LOCAL_MODEL === 'true') {
     try {
       const settings = parseYaml(readFileSync(env.SOUL_LOCAL_MODEL_CONFIG || resolve(homedir(), '.hermes/config.yaml'), 'utf8'));
       const provider = settings?.providers?.[settings.default_provider];
@@ -77,9 +78,9 @@ export function loadConfig(root = projectRoot, environment = process.env) {
   admin.configured = Boolean(admin.passwordHash);
   return {
     root, port, host: env.SOUL_HOST || '127.0.0.1',
-    databasePath: env.SOUL_DB_PATH || resolve(root, 'data/soulmatch.sqlite'),
+    databasePath: env.SOUL_DB_PATH || resolve(root, 'data/tongzhi.sqlite'),
     publicOrigin, secureCookies: publicOrigin.startsWith('https://'),
-    allowedOrigins: new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`, 'http://127.0.0.1:5176', 'http://localhost:5176', publicOrigin].filter(Boolean)),
+    allowedOrigins: new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`, 'http://127.0.0.1:5178', 'http://localhost:5178', 'http://127.0.0.1:5176', 'http://localhost:5176', publicOrigin].filter(Boolean)),
     ai, embedding, admin,
     zhihu: { accessSecret: credential('ZHIHU_ACCESS_SECRET', 'zhihu_access_secret'), oauth, oauthConfigured: Boolean(oauth.appId && oauth.appKey && oauth.redirectUri) },
   };

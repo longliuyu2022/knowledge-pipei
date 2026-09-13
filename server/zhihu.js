@@ -64,9 +64,10 @@ export class Zhihu {
     const tokenData = oauthPayload(await this.raw('https://openapi.zhihu.com/access_token', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: form }));
     if (typeof tokenData.access_token !== 'string' || tokenData.access_token.length < 5) fail(401, 'zhihu_auth_failed', '知乎授权未完成，请重新连接');
     const profile = oauthPayload(await this.raw('https://openapi.zhihu.com/user', { headers: { Authorization: `Bearer ${tokenData.access_token}` } }));
-    const subject = clean(profile.hash_id, 128) || (typeof profile.uid === 'string' && /^\d+$/.test(profile.uid) ? profile.uid : Number.isSafeInteger(profile.uid) && profile.uid > 0 ? String(profile.uid) : '');
+    const hashSubject = clean(profile.hash_id,128);
+    const subject = hashSubject || (typeof profile.uid === 'string' && /^\d+$/.test(profile.uid) ? profile.uid : Number.isSafeInteger(profile.uid) && profile.uid > 0 ? String(profile.uid) : '');
     if (!subject) fail(401, 'zhihu_identity_missing', '知乎未返回有效用户身份，请重新连接');
-    return { identity: { subject, name: clean(profile.fullname, 24) || '知乎用户', avatar: safeZhihuUrl(profile.avatar_path, true) }, token: tokenData.access_token, expiresIn: tokenData.expires_in };
+    return { identity: { subject, subjectKind:hashSubject?'hash':'uid', name: clean(profile.fullname, 24) || '知乎用户', avatar: safeZhihuUrl(profile.avatar_path, true) }, token: tokenData.access_token, expiresIn: tokenData.expires_in };
   }
   async business(path, params, userId = null) {
     if (!this.config.zhihu.accessSecret) fail(503, 'zhihu_unconfigured', '知乎内容连接暂未开放，可以先填写兴趣');

@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import './styles.css';
 import './readability.css';
+import './tongzhi.css';
 
 const AdminApp = React.lazy(() => import('./AdminApp'));
 const isAdmin = /^\/admin(?:\/|$)/.test(location.pathname);

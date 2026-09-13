@@ -14,7 +14,7 @@ type ImportResult = { count: number; counts: Partial<Record<ImportSource, number
 function downloadJSON(value: unknown) {
   const blob = new Blob([JSON.stringify(value, null, 2)], { type: 'application/json;charset=utf-8' });
   const url = URL.createObjectURL(blob), link = document.createElement('a');
-  link.href = url; link.download = `tongpin-my-data-${new Date().toISOString().slice(0, 10)}.json`;
+  link.href = url; link.download = `tongzhi-my-data-${new Date().toISOString().slice(0, 10)}.json`;
   document.body.appendChild(link); link.click(); link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -62,7 +62,7 @@ export function SettingsDialog({ actions, onClose, onReset }: DialogProps & { on
   async function exportData() {
     if (pending.current) return;
     pending.current = true; setBusy('export'); setError('');
-    try { downloadJSON(await api('/account/export')); actions.notify('已开始下载你在同频的数据。'); }
+    try { downloadJSON(await api('/account/export')); actions.notify('已开始下载你在同知的数据。'); }
     catch (cause) { setError(messageOf(cause)); }
     finally { pending.current = false; setBusy(''); }
   }
@@ -89,8 +89,8 @@ export function SettingsDialog({ actions, onClose, onReset }: DialogProps & { on
 
     <section className="account-section account-session"><div className="account-setting-row"><div><strong>退出当前会话</strong><p>{data.user.provider === 'guest' ? '访客资料关联当前浏览器会话，退出后无法找回。建议先导出。' : '退出会让你暂时离开匹配池，再次连接知乎可回到自己的账号。'}</p></div><button className="button secondary account-small-button" disabled={Boolean(busy)} onClick={() => setConfirm('logout')}><LogOut size={15} />退出</button></div>
       {confirmAction === 'logout' && <div className="account-confirm-box"><strong>确认退出当前会话？</strong><p>{data.user.provider === 'guest' ? '退出后将创建一个新的访客身份，当前资料无法通过该访客身份恢复。' : '当前知乎连接将结束，等待中的邀请会取消。'}</p><div><button className="button secondary account-small-button" disabled={Boolean(busy)} onClick={() => setConfirm(null)}>留下来</button><button className="button primary account-small-button" disabled={Boolean(busy)} onClick={() => void change('logout', async () => { await api('/logout', { method: 'POST', json: {} }); }, '已退出，当前为新的访客会话。', true)}>{busy === 'logout' ? <Spinner text="正在退出…" /> : '确认退出'}</button></div></div>}
-      <button className="text-button account-danger-text account-delete-trigger" disabled={Boolean(busy)} onClick={() => setConfirm('delete')}><Trash2 size={14} />删除我在同频的全部数据</button>
-      {confirmAction === 'delete' && <form className="account-confirm-box account-delete-box" onSubmit={event => { event.preventDefault(); if (confirmation.trim() === '删除') void change('delete', async () => { await api('/account', { method: 'DELETE', json: { confirm: 'delete' } }); }, '你在同频的数据已删除。', true); }}><strong>这次告别，将清除所有记录</strong><p>删除此账号在同频的画像、导入摘要、收藏和对话记录，并退出登录。此操作无法撤销，你的知乎账号与知乎内容不受影响。</p><label htmlFor={confirmationId}>请输入「删除」以确认</label><input id={confirmationId} autoComplete="off" className="account-confirm-input" placeholder="删除" value={confirmation} onChange={event => setConfirmation(event.target.value)} disabled={Boolean(busy)} /><div><button type="button" className="button secondary account-small-button" disabled={Boolean(busy)} onClick={() => setConfirm(null)}>取消</button><button type="submit" className="button account-danger-button account-small-button" disabled={Boolean(busy) || confirmation.trim() !== '删除'}>{busy === 'delete' ? <Spinner text="正在删除…" /> : '永久删除我的数据'}</button></div></form>}
+      <button className="text-button account-danger-text account-delete-trigger" disabled={Boolean(busy)} onClick={() => setConfirm('delete')}><Trash2 size={14} />删除我在同知的全部数据</button>
+      {confirmAction === 'delete' && <form className="account-confirm-box account-delete-box" onSubmit={event => { event.preventDefault(); if (confirmation.trim() === '删除') void change('delete', async () => { await api('/account', { method: 'DELETE', json: { confirm: 'delete' } }); }, '你在同知的数据已删除。', true); }}><strong>这次告别，将清除所有记录</strong><p>删除此账号在同知的画像、导入摘要、收藏、AI 会话与私聊记录，并撤回本人小组发言及其派生内容，并退出登录。此操作无法撤销，你的知乎账号与知乎内容不受影响。</p><label htmlFor={confirmationId}>请输入「删除」以确认</label><input id={confirmationId} autoComplete="off" className="account-confirm-input" placeholder="删除" value={confirmation} onChange={event => setConfirmation(event.target.value)} disabled={Boolean(busy)} /><div><button type="button" className="button secondary account-small-button" disabled={Boolean(busy)} onClick={() => setConfirm(null)}>取消</button><button type="submit" className="button account-danger-button account-small-button" disabled={Boolean(busy) || confirmation.trim() !== '删除'}>{busy === 'delete' ? <Spinner text="正在删除…" /> : '永久删除我的数据'}</button></div></form>}
     </section>
     {error && <p className="form-error account-error" role="alert">{error}</p>}
     <p className="account-bottom-note"><LockKeyhole size={13} />你的好奇心，始终由你自己掌握</p>
@@ -125,9 +125,9 @@ export function LoginDialog({ actions, onClose }: DialogProps) {
       <button className="button secondary login-main-action" onClick={create}>{data.profile ? '完善我的兴趣画像' : '创建我的兴趣画像'}</button>
     </> : <>
       <div className="login-intro"><h3>好内容里，藏着同频的你</h3><p>把你愿意分享的知识线索，变成相遇的起点。</p></div>
-      <div className="login-benefits"><div><UserRound size={19} /><span><strong>连接自己的账号</strong><p>在知乎页面亲自登录并确认授权，连接昵称与头像。</p></span></div><div><BookOpen size={19} /><span><strong>主动选择，按需导入</strong><p>可选择公开创作摘要、关注简介与近期收藏摘要，每类最多 10 条。</p></span></div><div><LockKeyhole size={19} /><span><strong>公开与否，由你决定</strong><p>创建画像默认不加入匹配池，原始导入摘要不会展示给伙伴。</p></span></div></div>
+      <div className="login-benefits"><div><UserRound size={19} /><span><strong>连接自己的账号</strong><p>在知乎页面亲自登录并确认授权；站内继续使用你选择的昵称。</p></span></div><div><BookOpen size={19} /><span><strong>主动选择，按需导入</strong><p>可选择公开创作摘要、关注简介与近期收藏摘要，每类最多 10 条。</p></span></div><div><LockKeyhole size={19} /><span><strong>公开与否，由你决定</strong><p>创建画像默认不加入匹配池，原始导入摘要不会展示给伙伴。</p></span></div></div>
       {!data.capabilities.oauth && <div className="login-status-note"><CircleHelp size={18} /><p><strong>知乎登录暂未开放</strong>本站尚未启用知乎登录。你可以先选择兴趣，体验画像与匹配。</p></div>}
-      {data.capabilities.oauth && !data.capabilities.zhihuData && <p className="login-capability-note">当前可连接昵称与头像，内容导入将在开放后可用。</p>}
+      {data.capabilities.oauth && !data.capabilities.zhihuData && <p className="login-capability-note">当前可绑定知乎登录身份，内容导入将在开放后可用。</p>}
       {error && <p className="form-error" role="alert">{error}</p>}
       {data.capabilities.oauth && <button className="button primary login-main-action" onClick={connect} disabled={busy}>{busy ? <Spinner text="正在前往知乎…" /> : <>{data.user.provider === 'zhihu' ? '重新连接知乎' : '前往知乎授权'}<ArrowUpRight size={17} /></>}</button>}
       <button className={`button ${data.capabilities.oauth ? 'secondary' : 'primary'} login-main-action`} onClick={create} disabled={busy}>{data.profile ? '继续完善我的画像' : '先用兴趣创建画像'}<ArrowRight size={16} /></button>
@@ -145,7 +145,7 @@ const importOptions = [
 export function ImportDialog({ actions, onClose }: DialogProps) {
   const { data } = actions;
   const [sources, setSources] = useState<ImportSource[]>([]);
-  const [useAI, setUseAI] = useState(data.capabilities.ai);
+  const [useAI, setUseAI] = useState(false);
   const [busy, setBusy] = useState(false);
   const [checking, setChecking] = useState(false);
   const pending = useRef(false);

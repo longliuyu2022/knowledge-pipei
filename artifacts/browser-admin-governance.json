@@ -1,0 +1,67 @@
+{
+  "suite": "admin-governance",
+  "status": "passed",
+  "startedAt": "2026-09-13T09:28:34.483Z",
+  "checks": [
+    {
+      "label": "隔离邮箱账号、小组与实际待复核案件，不读取生产数据或外部模型",
+      "status": "passed",
+      "elapsedMs": 475
+    },
+    {
+      "label": "邮箱、异步匹配、小组与治理指标来自真实管理 API，列表不含私聊正文",
+      "status": "passed",
+      "elapsedMs": 1300
+    },
+    {
+      "label": "邮箱筛选和绑定信息只展示脱敏地址，用户详情不成为私聊读取入口",
+      "status": "passed",
+      "elapsedMs": 476
+    },
+    {
+      "label": "管理员填写复核原因后才读取案件和最小上下文，并产生审计",
+      "status": "passed",
+      "elapsedMs": 936
+    },
+    {
+      "label": "复核处置有忙态并落库，24 小时禁言不自动重发内容",
+      "status": "passed",
+      "elapsedMs": 1113
+    },
+    {
+      "label": "账号停用与恢复都要求原因，停用撤会话，恢复解除限制",
+      "status": "passed",
+      "elapsedMs": 1900
+    },
+    {
+      "label": "管理端处理真实小组举报，隐藏发言并保护依赖它的成果",
+      "status": "passed",
+      "elapsedMs": 482
+    },
+    {
+      "label": "治理后台桌面、390 与 320 像素可操作且无横向溢出",
+      "status": "passed",
+      "elapsedMs": 1700
+    },
+    {
+      "label": "管理员会话失效时，正在查看的案件内容立即卸载且不能继续处置",
+      "status": "passed",
+      "elapsedMs": 893
+    },
+    {
+      "label": "浏览器运行与静态资源无错误",
+      "status": "passed",
+      "elapsedMs": 0
+    }
+  ],
+  "pageErrors": [],
+  "assetErrors": [],
+  "configuration": {
+    "database": "temporary isolated SQLite",
+    "adminCredentials": "generated fixture only",
+    "externalAI": false,
+    "emailAccounts": 1,
+    "cases": 2
+  },
+  "finishedAt": "2026-09-13T09:28:44.960Z"
+}

@@ -1,0 +1,27 @@
+{
+  "status": "passed",
+  "checkedAt": "2026-09-13T09:25:32.780Z",
+  "checks": [
+    {
+      "label": "未授权时不调用模型，知识话题与聊天均可使用",
+      "status": "passed"
+    },
+    {
+      "label": "仅一方同意不会向外部模型发送材料",
+      "status": "passed"
+    },
+    {
+      "label": "双方同意后自动生成，有出处且只加入草稿",
+      "status": "passed"
+    },
+    {
+      "label": "刷新复用已授权话题，撤回后两端清除模型结果",
+      "status": "passed"
+    },
+    {
+      "label": "320px 和 390px 保持授权与话题可读",
+      "status": "passed"
+    }
+  ],
+  "errors": []
+}

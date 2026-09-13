@@ -3,8 +3,14 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { resolve, extname } from 'node:path';
 import { capabilities } from './config.js';
-import { Store } from './store.js';
-import { Intelligence } from './ai.js';
+import { KnowledgeStore as Store } from './knowledge-store.js';
+import { PersistentMatching } from './persistent-matching.js';
+import { createAccounts } from './accounts.js';
+import { Moderation } from './moderation.js';
+import { createKnowledge } from './knowledge.js';
+import { createCompanion } from './companion.js';
+import { createCircles } from './circles/index.js';
+import { Intelligence, ruleIcebreakers } from './ai.js';
 import { Zhihu } from './zhihu.js';
 import { Pairing } from './pairing.js';
 import { createAdminRouter } from './admin.js';
@@ -42,6 +48,7 @@ export function createApp(config, options = {}) {
   const store = options.store || new Store(config.databasePath);
   const ai = options.ai || new Intelligence(config, { fetchImpl: options.fetchImpl });
   const zhihu = options.zhihu || new Zhihu(config, { fetchImpl: options.fetchImpl });
+  if (!ai.json) ai.json = (system, payload) => { if (typeof ai.generate !== 'function') return Promise.reject(new Error('Model unavailable')); return ai.generate(system, payload); };
   const app = express();
   const streams = new Map(), oauthRequests = new Map(), limits = new Map(), mutations = new Set();
   const cookieOptions = { httpOnly: true, sameSite: 'lax', secure: config.secureCookies, path: '/' };
@@ -65,7 +72,25 @@ export function createApp(config, options = {}) {
   }
   function broadcast(event = 'pool') { for (const userId of streams.keys()) emit(userId, event); }
   const pairing = new Pairing(store, { ...options.pairingOptions, onChange(userId) { emit(userId, 'pairing'); emit(userId); } });
-  const admin = createAdminRouter(config, { store, pairing, onlineIds: () => new Set(streams.keys()) });
+  function assertSession(req) {
+    if (store.session(req.cookies?.tongzhi_session)?.user.id !== req.viewer?.id) fail(401, 'session_expired', '会话已结束，请刷新后重试');
+  }
+  const matching = new PersistentMatching(store, { ...options.matchingOptions, emit });
+  const moderation = new Moderation({ store, ai, config, emit });
+  const circles = createCircles({ store, ai, zhihu, rate, emit, broadcast, assertSession,
+    moderate: context => moderation.moderate(context),
+    notify: (userId, data) => { const id = store.notify(userId, { ...data, href: data.href?.replace(/^\//, '') }); emit(userId); return id; },
+    connect: async context => {
+      if (!store.groupAccess(context.userId, context.targetId, context.circleId)) fail(403, 'connection_unavailable', '双方需先允许小组交流邀请');
+      const reviewed = await moderation.moderate({ userId: context.userId, text: context.message || '想围绕共同问题深入交流', scope: 'invitation', scopeId: context.circleId });
+      if (!reviewed.allowed) fail(422, 'moderation_pending', reviewed.notice);
+      const result = store.circleInvite(context); emit(context.userId); emit(context.targetId); return result;
+    },
+  });
+  store.groupAccess = (...args) => circles.canConnect(...args);
+  store.onUserChanged = (id, reason) => { matching.invalidate(id, reason); ai.clearCache?.(); emit(id); };
+  const companion = createCompanion({ store, ai, assertSession, rate });
+  const admin = createAdminRouter(config, { store, pairing, moderation, matching, broadcast, onlineIds: () => new Set(streams.keys()) });
   const heartbeat = setInterval(() => { for (const group of streams.values()) for (const res of group) res.write(': heartbeat\n\n'); }, 25000);
   heartbeat.unref();
   const own = req => store.profile(req.viewer.id) || SAMPLE_PROFILE;
@@ -89,7 +114,7 @@ export function createApp(config, options = {}) {
     try { return await job(); } finally { mutations.delete(userId); }
   }
 
-  app.get('/api/health', (_req, res) => res.json({ status: 'ok', app: '同频 · 知乎灵魂对对碰', version: '1.0.0' }));
+  app.get('/api/health', (_req, res) => res.json({ status: 'ok', app: '同知 · 问题与知识连接', version: '2.0.0' }));
   app.get('/auth/callback', (req, res) => {
     res.set('Cache-Control', 'no-store');
     const queryStart = req.originalUrl.indexOf('?');
@@ -103,11 +128,11 @@ export function createApp(config, options = {}) {
     const callback = req.path === '/auth/zhihu/callback';
     const origin = req.get('origin');
     if (!callback && ((origin && !config.allowedOrigins.has(origin)) || req.get('sec-fetch-site') === 'cross-site')) fail(403, 'origin_mismatch', '请从本站页面操作');
-    let session = store.session(req.cookies.soul_session);
+    let session = store.session(req.cookies.tongzhi_session);
     if (!session && req.path === '/bootstrap' && req.method === 'GET') {
       rate(`new:${req.ip}`, 30);
       const user = store.createUser(); const created = store.createSession(user.id);
-      res.cookie('soul_session', created.token, { ...cookieOptions, maxAge: 30 * 86400000 });
+      res.cookie('tongzhi_session', created.token, { ...cookieOptions, maxAge: 30 * 86400000 });
       session = { user, csrf: created.csrf };
     }
     if (!session && !callback) fail(401, 'session_required', '会话已结束，请刷新页面');
@@ -129,6 +154,14 @@ export function createApp(config, options = {}) {
     res.flushHeaders(); res.write(': connected\n\n'); group.add(res);
     req.on('close', () => { group.delete(res); if (!group.size) streams.delete(req.viewer.id); });
   });
+
+  app.use('/api', createAccounts({ store, rate, assertSession, cookieOptions, emit, zhihu }));
+  app.use('/api/matching', matching.router(rate));
+  app.use('/api/circles', circles.router);
+  const knowledge = createKnowledge({ store, ai, circles, assertSession, emit, mutate, rate });
+  app.use('/api/knowledge', knowledge);
+  app.use('/api/companion', companion.router);
+  app.use('/api', moderation.router({ rate, assertSession }));
 
   app.get('/api/pairing', (req, res) => res.json(pairing.state(req.viewer.id)));
   app.post('/api/pairing/start', (req, res) => {
@@ -153,9 +186,12 @@ export function createApp(config, options = {}) {
     if (!Number.isInteger(req.body.revision) || req.body.revision < 0) fail(400, 'invalid_revision', '画像版本无效，请刷新页面');
     const profile = await mutate(req.viewer.id, async () => {
       const current = store.profile(req.viewer.id);
+      const consent = store.preferences(req.viewer.id).revision;
       if (req.body.revision !== (current?.revision || 0)) fail(409, 'profile_changed', '画像已在其他页面更新，请刷新后再试');
       pairing.invalidate(req.viewer.id, 'profile_changed');
-      const generated = await ai.enrichProfile(buildProfile(input, store.imports(req.viewer.id).items), req.body.useAI !== false);
+      const generated = await ai.enrichProfile(buildProfile(input, store.imports(req.viewer.id).items), req.body.useAI === true);
+      assertSession(req);
+      if (store.preferences(req.viewer.id).revision !== consent) fail(409,'preferences_changed','授权偏好已变化，请确认后重新生成');
       return store.saveProfile(req.viewer.id, generated, req.body.revision);
     });
     emit(req.viewer.id); broadcast(); res.json({ profile });
@@ -172,7 +208,7 @@ export function createApp(config, options = {}) {
     if (!['demo', 'people'].includes(pool) || !['resonance', 'complement'].includes(mode)) fail(400, 'invalid_filter', '匹配筛选条件无效');
     const profile = own(req), saved = new Set(store.savedIds(req.viewer.id));
     let people = pool === 'demo' ? DEMO_PROFILES.filter(p => !store.isBlocked(req.viewer.id, p.id)) : store.people(req.viewer.id);
-    const semantics = await ai.semanticScores(profile, people);
+    const semantics = pool === 'demo' ? await ai.semanticScores(profile, people) : null;
     let matches = people.map((person, i) => ({ ...compareProfiles(profile, person, mode, semantics?.[i] ?? null), saved: saved.has(person.id) }));
     if (typeof req.query.topic === 'string' && req.query.topic !== 'all') matches = matches.filter(p => p.interests.some(t => t.id === req.query.topic));
     if (typeof req.query.q === 'string' && req.query.q.trim()) {
@@ -187,11 +223,13 @@ export function createApp(config, options = {}) {
   app.post('/api/people/:id/explain', async (req, res) => {
     rate(`explain:${req.viewer.id}`, 15);
     const match = compareProfiles(own(req), findPerson(req, req.params.id), req.body.mode === 'complement' ? 'complement' : 'resonance');
+    if (!match.demo) return res.json({mode:'rules',reasons:match.reasons,bridge:match.question || '比较一个共同问题的证据与解释。',notice:'知识匹配先依据显式兴趣解释；双方建立连接并同意后，可在对话中使用 AI 知识破冰。'});
     res.json(await ai.explain(own(req), match));
   });
   app.post('/api/people/:id/icebreakers', async (req, res) => {
     rate(`ice:${req.viewer.id}`, 12);
     const profile = own(req), match = compareProfiles(profile, findPerson(req, req.params.id));
+    if (!match.demo) return res.json({mode:'rules',questions:ruleIcebreakers(match),sourceIds:[],sources:[],notice:'双方建立连接并同意后，可在对话中自动生成带知乎资料的 AI 话题。',sourceNotice:null});
     const references = await zhihu.search(match.shared.slice(0, 2).map(t => t.label).join(' ') || match.interests[0].label);
     const generated = await ai.icebreakers(profile, match, references.items);
     res.json({ ...generated, sources: references.items, sourceNotice: references.notice });
@@ -209,11 +247,15 @@ export function createApp(config, options = {}) {
     }).filter(Boolean);
     res.json({ saved, invitations: store.invitations(req.viewer.id) });
   });
-  app.post('/api/invitations', (req, res) => {
+  app.post('/api/invitations', async (req, res) => {
     rate(`invite:${req.viewer.id}`, 5);
     const person = findPerson(req, requiredText(req.body.targetId, '伙伴标识', 100));
     if (person.demo) fail(400, 'demo_person', '体验人物是虚构角色，可以收藏和练习破冰；不能向其发送邀请');
-    const invitationId = store.invite(req.viewer.id, person.id, requiredText(req.body.message, '邀请内容', 500, 2));
+    const text = requiredText(req.body.message, '邀请内容', 500, 2);
+    const checked = await moderation.moderate({userId:req.viewer.id,text,scope:'invitation',scopeId:person.id});
+    assertSession(req);
+    if (!checked.allowed) fail(422,'moderation_pending',checked.notice);
+    const invitationId = store.invite(req.viewer.id, person.id, text);
     pairing.tick();
     emit(req.viewer.id); emit(person.id); res.status(201).json({ id: invitationId });
   });
@@ -227,16 +269,25 @@ export function createApp(config, options = {}) {
     const conversation = store.conversation(req.viewer.id, req.params.id);
     res.json({ person: store.publicUser(conversation.sender_id === req.viewer.id ? conversation.recipient_id : conversation.sender_id, req.viewer.id, true), invitation: conversation.message, ...store.messages(req.viewer.id, req.params.id, typeof req.query.before === 'string' ? req.query.before : null) });
   });
-  app.use('/api/conversations', createConversationContextRouter({ store, ai, zhihu, rate }));
-  app.post('/api/conversations/:id/messages', (req, res) => {
+  app.use('/api/conversations', createConversationContextRouter({ store, ai, zhihu, rate, emit }));
+  app.post('/api/conversations/:id/messages', async (req, res) => {
     rate(`message:${req.viewer.id}`, 30);
     const clientMessageId = req.body.clientMessageId;
     if (clientMessageId !== undefined && (typeof clientMessageId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(clientMessageId))) fail(400, 'invalid_message_id', '消息重试标识格式不正确');
-    const result = store.sendMessage(req.viewer.id, req.params.id, requiredText(req.body.text, '消息', 2000), clientMessageId?.toLowerCase());
+    const text = requiredText(req.body.text, '消息', 2000);
+    store.conversation(req.viewer.id, req.params.id);
+    const existing = clientMessageId && store.db.prepare('SELECT text FROM messages WHERE conversation_id=? AND author_id=? AND client_message_id=?').get(req.params.id, req.viewer.id, clientMessageId.toLowerCase());
+    if (!existing) {
+      const reviewed = await moderation.moderate({ userId: req.viewer.id, text, scope: 'conversation', scopeId: req.params.id });
+      assertSession(req);
+      if (!reviewed.allowed) fail(422, 'moderation_pending', reviewed.notice);
+    }
+    const result = store.sendMessage(req.viewer.id, req.params.id, text, clientMessageId?.toLowerCase());
     emit(req.viewer.id); emit(result.recipientId); res.status(201).json(result.message);
   });
   app.post('/api/blocked/:id', (req, res) => {
-    if (!pairing.mayBlock(req.viewer.id, req.params.id)) findPerson(req, req.params.id);
+    const proposed = store.db.prepare("SELECT 1 FROM match_proposals WHERE status='pending' AND ((a_id=? AND b_id=?) OR (a_id=? AND b_id=?))").get(req.viewer.id, req.params.id, req.params.id, req.viewer.id);
+    if (!proposed && !pairing.mayBlock(req.viewer.id, req.params.id)) findPerson(req, req.params.id);
     store.block(req.viewer.id, req.params.id);
     pairing.blocked(req.viewer.id, req.params.id);
     emit(req.viewer.id); emit(req.params.id); broadcast(); res.json({ ok: true });
@@ -251,30 +302,30 @@ export function createApp(config, options = {}) {
     if (oauthRequests.size > 1000) fail(429, 'oauth_busy', '连接请求较多，请稍后再试');
     const state = randomBytes(24).toString('base64url'), browser = randomBytes(24).toString('base64url');
     oauthRequests.set(browser, { state, userId: req.viewer.id, expiresAt: Date.now() + 600000 });
-    res.cookie('soul_oauth', browser, { ...cookieOptions, path: '/api/auth/zhihu', maxAge: 600000 });
+    res.cookie('tongzhi_oauth', browser, { ...cookieOptions, path: '/api/auth/zhihu', maxAge: 600000 });
     const url = new URL('https://openapi.zhihu.com/authorize');
     url.searchParams.set('app_id', config.zhihu.oauth.appId); url.searchParams.set('redirect_uri', config.zhihu.oauth.redirectUri);
     url.searchParams.set('response_type', 'code'); url.searchParams.set('state', state);
     res.json({ url: url.href });
   });
   app.get('/api/auth/zhihu/callback', async (req, res) => {
-    const browser = req.cookies.soul_oauth, request = oauthRequests.get(browser);
+    const browser = req.cookies.tongzhi_oauth, request = oauthRequests.get(browser);
     oauthRequests.delete(browser);
-    res.clearCookie('soul_oauth', { ...cookieOptions, path: '/api/auth/zhihu' });
+    res.clearCookie('tongzhi_oauth', { ...cookieOptions, path: '/api/auth/zhihu' });
     if (!config.zhihu.oauthConfigured || !request || request.expiresAt < Date.now() || !secureEqual(request.state, req.query.state) || !req.viewer || req.viewer.id !== request.userId) return res.redirect('/?auth=state_error#profile');
     const code = req.query.authorization_code || req.query.code;
     if (typeof code !== 'string' || code.length > 2000 || !code.trim()) return res.redirect('/?auth=cancelled#profile');
     try {
       const connected = await zhihu.exchange(code);
-      if (store.session(req.cookies.soul_session)?.user.id !== request.userId) return res.redirect('/?auth=state_error#profile');
+      if (store.session(req.cookies.tongzhi_session)?.user.id !== request.userId) return res.redirect('/?auth=state_error#profile');
       pairing.forget(request.userId, 'account_changed');
       const user = store.oauthUser(request.userId, connected.identity);
       store.touchUser(user.id);
       if (user.id !== request.userId && store.profile(request.userId)) store.setDiscoverable(request.userId, false);
       zhihu.setToken(user.id, connected.token, connected.expiresIn);
-      store.endSession(req.cookies.soul_session);
+      store.endSession(req.cookies.tongzhi_session);
       const session = store.createSession(user.id);
-      res.cookie('soul_session', session.token, { ...cookieOptions, maxAge: 30 * 86400000 });
+      res.cookie('tongzhi_session', session.token, { ...cookieOptions, maxAge: 30 * 86400000 });
       broadcast(); broadcast('changed');
       res.redirect('/?auth=success#profile');
     } catch { res.redirect('/?auth=failed#profile'); }
@@ -287,7 +338,7 @@ export function createApp(config, options = {}) {
     rate(`zhihu-check:${req.viewer.id}`, 2);
     const result = await mutate(req.viewer.id, async () => {
       const assertCurrent = () => {
-        if (store.session(req.cookies.soul_session)?.user.id !== req.viewer.id) fail(401, 'session_expired', '当前会话已结束，请重新连接');
+        if (store.session(req.cookies.tongzhi_session)?.user.id !== req.viewer.id) fail(401, 'session_expired', '当前会话已结束，请重新连接');
       };
       const report = await checkZhihuData(zhihu, req.viewer.id, assertCurrent);
       assertCurrent();
@@ -303,12 +354,15 @@ export function createApp(config, options = {}) {
     if (req.viewer.provider !== 'zhihu') fail(401, 'zhihu_required', '请先连接你自己的知乎账号');
     rate(`import:${req.viewer.id}`, 3);
     const result = await mutate(req.viewer.id, async () => {
+      const consent = store.preferences(req.viewer.id).revision;
       pairing.invalidate(req.viewer.id, 'profile_changed');
       const imported = await zhihu.import(req.viewer.id, sources);
+      assertSession(req);
       const current = store.profile(req.viewer.id);
       let generated = null;
-      if (current) generated = await ai.enrichProfile(buildProfile(current.input, imported.items), req.body.useAI !== false);
-      if (!store.user(req.viewer.id)) fail(401, 'session_expired', '会话已经结束');
+      if (current) generated = await ai.enrichProfile(buildProfile(current.input, imported.items), req.body.useAI === true);
+      assertSession(req);
+      if (store.preferences(req.viewer.id).revision !== consent) fail(409,'preferences_changed','授权偏好已变化，本次导入未保存');
       store.saveImports(req.viewer.id, imported.items);
       if (generated) store.saveProfile(req.viewer.id, generated, current.revision);
       return { count: imported.items.length, counts: imported.counts, profile: store.profile(req.viewer.id) };
@@ -324,16 +378,17 @@ export function createApp(config, options = {}) {
     });
     emit(req.viewer.id); broadcast(); res.json({ profile: store.profile(req.viewer.id) });
   });
+  const knowledgeExport = userId => knowledge.exportUser(userId);
   app.get('/api/account/export', (req, res) => {
-    res.set('Content-Disposition', 'attachment; filename="tongpin-my-data.json"');
-    res.json({ exportedAt: new Date().toISOString(), user: req.viewer, profile: store.profile(req.viewer.id), imports: store.imports(req.viewer.id), zhihuValidation: store.zhihuValidation(req.viewer.id), savedIds: store.savedIds(req.viewer.id) });
+    res.set('Content-Disposition', 'attachment; filename="tongzhi-my-data.json"');
+    res.json({ exportedAt: new Date().toISOString(), user: req.viewer, profile: store.profile(req.viewer.id), imports: store.imports(req.viewer.id), zhihuValidation: store.zhihuValidation(req.viewer.id), savedIds: store.savedIds(req.viewer.id), preferences: store.preferences(req.viewer.id), knowledge: knowledgeExport(req.viewer.id), circles: circles.exportUser(req.viewer.id), companion: companion.exportUser(req.viewer.id) });
   });
   app.post('/api/logout', (req, res) => {
     if (mutations.has(req.viewer.id)) fail(409, 'profile_busy', '画像正在更新，完成后再退出');
     pairing.forget(req.viewer.id, 'account_changed');
     if (store.profile(req.viewer.id)) store.setDiscoverable(req.viewer.id, false);
-    zhihu.forget(req.viewer.id); ai.clearCache(); store.endSession(req.cookies.soul_session);
-    res.clearCookie('soul_session', cookieOptions); broadcast(); broadcast('changed');
+    zhihu.forget(req.viewer.id); ai.clearCache(); store.endSession(req.cookies.tongzhi_session);
+    res.clearCookie('tongzhi_session', cookieOptions); broadcast(); broadcast('changed');
     for (const stream of streams.get(req.viewer.id) || []) stream.end();
     res.json({ ok: true });
   });
@@ -341,9 +396,9 @@ export function createApp(config, options = {}) {
     if (mutations.has(req.viewer.id)) fail(409, 'profile_busy', '画像正在更新，完成后再删除');
     if (req.body.confirm !== 'delete') fail(400, 'confirmation_required', '请先确认删除你的全部数据');
     pairing.forget(req.viewer.id, 'account_changed');
-    store.deleteAccount(req.viewer.id); zhihu.forget(req.viewer.id); ai.clearCache();
+    circles.deleteUser(req.viewer.id); store.deleteAccount(req.viewer.id); zhihu.forget(req.viewer.id); ai.clearCache();
     for (const [key, value] of oauthRequests) if (value.userId === req.viewer.id) oauthRequests.delete(key);
-    res.clearCookie('soul_session', cookieOptions); broadcast(); broadcast('changed');
+    res.clearCookie('tongzhi_session', cookieOptions); broadcast(); broadcast('changed');
     for (const stream of streams.get(req.viewer.id) || []) stream.end();
     res.json({ ok: true });
   });
@@ -365,5 +420,5 @@ export function createApp(config, options = {}) {
     if (status === 500) console.error('Request failed:', error.name || 'Error');
     res.status(status).json({ error: { code: error instanceof AppError ? error.code : 'request_failed', message: error instanceof AppError ? error.message : status === 400 ? '请求内容无效或过大' : '服务暂时遇到问题，请稍后再试' } });
   });
-  return { app, store, ai, zhihu, pairing, close() { clearInterval(heartbeat); admin.close(); pairing.close(); for (const group of streams.values()) for (const res of group) res.end(); store.close(); } };
+  return { app, store, ai, zhihu, pairing, matching, circles, moderation, companion, close() { clearInterval(heartbeat); admin.close(); matching.close(); circles.close(); pairing.close(); for (const group of streams.values()) for (const res of group) res.end(); store.close(); } };
 }

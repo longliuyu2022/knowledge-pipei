@@ -1,163 +1,150 @@
-# 同频后端 API
+# 同知 API 与页面路由
 
-Node.js 22.13+、Express 5、SQLite。生产环境由同一个服务提供前端构建与 `/api`，监听地址默认 `127.0.0.1:3022`。
+本文记录当前主界面的接口与授权边界。接口定义以 `server/app.js` 及其挂载模块为准；小组完整字段与生命周期见 [CIRCLES_API.md](CIRCLES_API.md)，数据处理说明见 [PRIVACY.md](PRIVACY.md)。
 
-## 会话与错误
+## 页面入口
 
-浏览器先请求 `GET /api/bootstrap`。首次请求创建独立访客身份与随机 `HttpOnly; SameSite=Lax` 会话 Cookie；配置 HTTPS `SOUL_PUBLIC_ORIGIN` 后自动添加 `Secure`。会话有效期 30 天，数据库仅保存会话令牌的 SHA-256 摘要。
+| 路由 | 页面 |
+| --- | --- |
+| `/#discover` | 发现问题，默认入口 |
+| `/#my-circles` | 我加入的问题小组 |
+| `/#circles/<id>` | 指定小组；打开页面不会自动加入 |
+| `/#matching` | 异步知识伙伴匹配 |
+| `/#profile` | 知识画像、报告、历史及待确认建议 |
+| `/#connections`、`/#connections/<id>` | 交流邀请与指定私聊 |
+| `/#notifications` | 站内通知 |
+| `/#account` | 邮箱账号、偏好、处理记录及申诉 |
+| `/#companion` | 明确标注为 AI 的知识伙伴与自我对话 |
+| `/admin` | 独立管理员登录及治理后台 |
 
-所有更改数据的请求携带 `X-CSRF-Token: <bootstrap.csrf>`，正文使用 JSON 对象。服务校验请求来源；OAuth GET 回调独立校验原始会话、一次性 state 和浏览器 Cookie。成功登录轮换会话及 CSRF，前端应重新 bootstrap。业务 API 响应不缓存。
+兼容旧链接：`#pairing` 转到匹配，`#graph`、`#knowledge` 转到画像；`#connections?conversation=<id>` 可打开指定对话。主界面不将体验人物当作真实用户。
 
-统一错误形状：`{"error":{"code":"profile_changed","message":"..."}}`。常见 HTTP 状态：400 输入无效、401 会话或授权失效、403 来源或 CSRF 不匹配、404 目标不可访问、409 版本或操作冲突、429 限流、503 对应能力未配置。429 返回 `Retry-After: 60`；知乎日配额不足时需等待额度恢复。
+## 通用约定
 
-## 画像与匹配
+- 以下接口均以 `/api` 为前缀。业务响应直接返回 JSON 对象；错误为 `{error:{code,message}}`。常见状态为 400 参数错误、401 会话失效、403 无权限或缺少授权、404 资源不可访问、409 版本或状态冲突、422 内容待复核、429 限流。
+- 先请求 `GET /bootstrap` 建立或读取访客会话，取得 `csrf`。保留 HttpOnly 的 `tongzhi_session` Cookie，写请求携带 `x-csrf-token`，正文使用 JSON 对象。服务端检查来源、会话及资源权限；知道 ID 不代表有读取权。
+- 登录、注册和改密码会轮换会话与 CSRF；客户端应刷新 `/bootstrap`。`GET /health` 不需要会话；OAuth 回调另行校验 state 和发起授权的浏览器。
+- `GET /events` 是当前用户的 SSE 变更提示，不传聊天正文。客户端收到提示后重新读取有权限的接口。
+- 画像与偏好使用 `revision` 防止并发覆盖；涉及外部请求的主要流程在保存前再次核对会话、授权和材料版本。模型不可用时以 `mode:'rules'` 及 `notice` 明示规则结果。
+- 同一服务进程内，AI 功能共享每分钟最多五次、并发最多两个外部模型请求的预算；内容审核也计入。知乎业务 API 另有每分钟最多五次的共享上限。429 后进入冷却，缓存命中无需再次请求；这不是每位用户各自五次。
 
-| 方法与路径 | 输入 | 返回与行为 |
-| --- | --- | --- |
-| `GET /api/health` | 无 | `{status, app, version}`，不创建会话 |
-| `GET /api/bootstrap` | 无 | `{user, csrf, profile, sampleProfile, capabilities, zhihuConnected, imports, savedIds, incomingCount}` |
-| `POST /api/profile` | `{input, revision, useAI?}` | `{profile}`；初次 revision 为 0，更新必须带当前版本 |
-| `POST /api/profile/visibility` | `{discoverable, revision?}` | `{profile}`；公开时必须带当前 revision |
-| `GET /api/matches` | `pool=demo\|people`、`mode=resonance\|complement`、可选 `topic`、`q`、`saved=true` | `{matches, pool, mode, preview, total, algorithm, notice}` |
-| `GET /api/people/:id` | 伙伴 ID | `{match}`；检查公开状态、已接受连接及双向屏蔽 |
-| `POST /api/people/:id/explain` | 可选 `{mode:"resonance"\|"complement"}` | `{mode, reasons, bridge, notice?}`；返回的 mode 是 `model` 或 `rules` |
-| `POST /api/people/:id/icebreakers` | 空对象 | `{mode, questions, sourceIds, sources, sourceNotice, notice?}` |
-| `PUT /api/saved/:id` | `{saved}` | `{savedIds}`；可收藏体验人物 |
+## 身份、偏好与知乎授权
 
-`input`：`name`（1–24 字符）、`topicIds`（3–8 个不同的目录 ID）、`about`（可选，最多 360 字符）、`question`（可选，最多 200 字符）、`styleId`、`goals`（1–3 个不同的目录 ID）。目录来自 `shared/catalog.js`，不接受未知值。`useAI` 默认 true，false 明确使用规则。
+| 方法与路径 | 请求或结果 |
+| --- | --- |
+| `GET /account` | 本人站内昵称、身份类型、邮箱、`hasPassword`、`emailVerified` |
+| `POST /auth/email/register` | `{email,password,name}`；为当前访客注册，或为当前知乎身份绑定邮箱，返回 201 |
+| `POST /auth/email/login` | `{email,password}`；登录既有邮箱账号 |
+| `POST /auth/email/password` | `{currentPassword,newPassword}`；撤销所有旧会话，再签发当前会话 |
+| `GET /preferences` | `{preferences,revision,updatedAt}` |
+| `PUT /preferences` | `{revision,preferences:{...布尔字段}}`；可只提交变更项 |
+| `POST /auth/zhihu/start` | `{}`，取得授权跳转 `url` |
+| `GET /auth/zhihu/callback` | 校验 OAuth 回调；`/auth/callback` 转发至此 |
+| `GET /zhihu/validation`、`POST /zhihu/validation` | 查看检测报告；检测需 `{consent:true}`，五类检查各最多一条 |
+| `POST /zhihu/import` | `{sources:['contents','followees','collections'],useAI?:boolean}`；可选择其中一至三类 |
+| `DELETE /zhihu/import` | 清除导入、相关历史与建议，忘记本服务内的知乎令牌，按本人填写内容重建画像 |
 
-初次保存画像得到 revision 1；之后每次保存画像，或在已有画像时导入/清除知乎内容，都会把 revision 加 1，退出公开匹配并取消等待中的邀请。尚无画像时，导入/清除不会创建画像或增加版本，返回 `profile: null`。用户查看新内容后可用新 revision 再次公开。单独更改公开开关不增加 revision。409 时重新 bootstrap、让用户查看现有内容后再提交。退出匹配不会取消已接受连接，双方仍可查看伙伴与继续对话；屏蔽会撤销连接访问。
+邮箱按规范化值唯一绑定，密码保存为加盐 scrypt 哈希。**当前没有邮箱验证或邮件找回流程，绑定成功不代表已验证邮箱归属。** 不按昵称猜测或合并身份。
 
-真实池最多读取 50 位已公开参与者，不注入体验人物；空池返回空数组。体验池的八位人物固定标记 `demo: true` 与 `provider: "demo"`。公开画像不返回原始导入证据或私有输入对象。未建立自己的画像时用明确的 sampleProfile 预览。
+偏好默认值：`groupInvites:true`、`aiAnalysis:false`、`chatAnalysis:false`、`notificationDigests:true`。小组成员的 `aiConsent`、`allowConnections` 另行授权，默认关闭。`notificationDigests` 当前保存摘要偏好；通知生产逻辑仍会写入站内提醒，尚无独立定时摘要投递器。
 
-匹配指数不是关系成功概率。每个结果的 `breakdown` 包含百分制 `value` 与 `weight`，权重合计 100，显示分数严格等于 `round(sum(value × weight) / 100)`。同频模式综合知识领域、具体兴趣、交流节奏和期待；互补模式保留共同兴趣作为讨论起点，再衡量新视角。`algorithm` 明确标记当前使用的 `topics` 或 `embedding`。伙伴详情与连接列表使用可解释的主题计算；发现列表在可选向量服务成功时使用 embedding。
+知乎登录只建立身份连接，不自动导入内容。每次所选导入类型最多十条，保存标题、摘要或关注者简介及链接；搜索结果同样只是摘要，不能表述为已读全文。
 
-## 手动在线配对
+## 知识画像与本人发言建议
 
-发现页的推荐列表是浏览功能；在线配对必须由用户主动点击开始。只有已经生成画像、主动入队且持续在线的真实参与者才会成为候选，不从体验池补人。点击开始仅同意向本次配对的另一方临时展示公开画像字段，不会设置 `discoverable=true` 或让第三人查看私有画像。
+| 方法与路径 | 请求或结果 |
+| --- | --- |
+| `POST /profile` | `{input,revision,useAI?:boolean}`；生成或更新本人画像 |
+| `POST /profile/visibility` | `{discoverable,revision}`；开启可发现性时校验最新版本 |
+| `GET /knowledge/report` | 本人画像报告、材料覆盖说明与至多二十次画像历史 |
+| `GET /knowledge/suggestions` | `{items,enabled}`；只返回仍有材料权限及有效授权的建议 |
+| `POST /knowledge/suggestions` | `{sourceType:'conversation'\|'circle'\|'companion',sourceId,messageIds}`；显式选择 1–10 条本人发言 |
+| `POST /knowledge/suggestions/:id/accept` | `{revision}`；确认合并兴趣标签，画像重新保持私有 |
+| `POST /knowledge/suggestions/:id/dismiss` | `{}`；删除建议 |
 
-| 方法与路径 | JSON 输入 | 行为 |
-| --- | --- | --- |
-| `GET /api/pairing` | 无 | 读取本人当前状态，不入队、不续在线时间；忽略第三人身份查询参数 |
-| `POST /api/pairing/start` | `{revision, mode?, topic?}` | 以当前画像版本开始一轮；mode 默认为 `resonance`，可选 `complement` |
-| `POST /api/pairing/heartbeat` | 可选 `{attemptId}` | 仅为当前仍有效的排队/候选状态续在线时间 |
-| `POST /api/pairing/respond` | `{pairId, decision:"accept"\|"skip"}` | 确认对话或换一位；双方确认前不会创建聊天邀请 |
-| `POST /api/pairing/cancel` | 可选 `{attemptId}` | 停止当前未完成的匹配；在已连接状态只收起结果，不删除已有对话 |
+`input` 包含站内昵称、3–8 个兴趣 `topicIds`、自述、当前问题、交流期待 `goals` 与方式 `styleId`。新建、更新及接受建议不自动公开画像。
 
-以上接口均返回相同结构，修改接口沿用本站会话、来源和 CSRF 校验：
+生成本人发言建议要求单独开启 `chatAnalysis`；只有另开 `aiAnalysis` 才尝试将所选文本交给模型，否则本地提取标签。服务端检查消息作者、当前访问权和所选内容，过滤引用行，并在保存/接受时复查。关闭 `chatAnalysis` 清除建议。接受时仅将标签并入画像，不把私聊原句公开。**没有自动扫描私有聊天并更新画像的后台任务。**
 
-```json
-{
-  "status": "idle | searching | proposed | connected",
-  "attemptId": "本轮 UUID 或 null",
-  "mode": "resonance | complement",
-  "topic": null,
-  "expiresAt": null,
-  "heartbeatExpiresAt": null,
-  "pair": null,
-  "conversationId": null,
-  "reason": null,
-  "notice": null,
-  "queue": { "waiting": 0, "confirming": 0, "updatedAt": "2026-09-13T04:00:00.000Z" }
-}
-```
+## 异步匹配与私聊
 
-`pair` 非空时为 `{id, person, acceptedByMe, acceptedByOther}`。`person` 是完整的 Match（含 `saved`、`reasons`、`breakdown`），只包含当次另一方，不包含原始导入依据、第三人或队列名单。候选页面可直接展示该对象，普通 `/api/people/:id` 不因排队而开放私密画像。私密候选的屏蔽操作额外允许当前相互配对的双方使用原 `/api/blocked/:id`。
+| 方法与路径 | 请求或结果 |
+| --- | --- |
+| `GET /matching` | `{request,proposal,counts,conversationId,notice}` |
+| `POST /matching/start` | `{revision,mode:'resonance'\|'complement',question?}` |
+| `POST /matching/pause`、`/matching/resume`、`/matching/cancel` | `{requestId}` |
+| `POST /matching/respond` | `{proposalId,decision:'accept'\|'decline'}` |
+| `GET /connections` | 本人的收藏与交流邀请 |
+| `POST /invitations` | `{targetId,message}`；旧人物卡邀请入口同样进行内容审核 |
+| `POST /invitations/:id/respond` | `{action:'accept'\|'decline'}` |
+| `GET /conversations/:id` | 已接受连接内的对方卡片及分页消息，支持 `before` |
+| `POST /conversations/:id/messages` | `{text,clientMessageId?}`；最多 2000 字，推荐 UUID 重试键 |
+| `GET /conversations/:id/context` | 规则话题、双方 `aiConsent`、有效缓存及 `autoGenerate` |
+| `POST /conversations/:id/ai-consent` | `{enabled:boolean}`；只修改本人对该段对话的授权 |
+| `POST /conversations/:id/icebreakers` | `{}`；双方同意后才能生成 AI 话题 |
+| `GET /blocked`、`POST /blocked/:id`、`DELETE /blocked/:id` | 查看、添加、撤销全站屏蔽 |
 
-`searching` 的 `expiresAt` 是本轮开始后三分钟；`proposed` 时是候选产生后六十秒。两种状态都要求每 8–12 秒调用心跳，连续 45 秒未收到则退出。GET 不续期，迟到心跳也不会重新入队；用户需再次主动开始。定时清理默认每五秒运行，所有状态请求同时检查准确截止时间。确认超时或对方离开后，仍在线的一方可在原三分钟期限内继续寻找；原期限已结束则回到 idle。
+匹配请求与提案存于 SQLite，运行中的服务约每 15 秒检查，关闭浏览器后仍继续，重启后可恢复。请求有效期七天；提案最多保留 48 小时且不超过请求期限。请求状态为 `searching/proposed/paused/cancelled/expired/fulfilled`；双方接受才建立私聊。暂停不延长期限，拒绝或提案失效后有效请求可继续寻找；画像、账号或屏蔽变化会使待确认条件失效。
 
-进行中的相同 start 幂等，不刷新三分钟期限；更换 mode/topic 返回 409 `pairing_active`，需要先取消。topic 接受目录中的兴趣 ID，`null`、省略、空字符串或 `all` 表示不限；候选必须同时满足双方各自的筛选。优先处理较早入队者，再从合格候选中选择双方各自模式下平均指数更高的人。在线配对使用主题计算，不调用模型或 embedding。
+主动发起匹配授权系统使用已确认画像卡片进行本地比较，并向提案双方展示匹配理由；不要求将画像开放给全站发现。停止异步匹配请使用暂停或取消接口。
 
-双方点击 accept 后，后端在事务内创建一条既有邀请结构的 accepted 连接，`conversationId` 可直接用于原聊天接口。相同确认重试返回同一连接。skip 让双方继续排队；skip、取消、掉线及确认超时都会让这对人避让五分钟，避免马上再次相遇。仍在短期缓存中的旧 pairId，其迟到重试只返回本人的最新状态，不操作新的候选；他人、未知或缓存已清除的 pairId 返回 404。已接受连接、已有待处理邀请及双向屏蔽的两人不能再次配为候选。
+**已建立私聊的 AI 破冰单独实行双方同意。** 默认先展示规则话题；双方同意且无有效缓存时，聊天页自动请求生成。发送给模型的是共享兴趣、本人问题、对方自述/问题/交流方式，以及最多三条知乎搜索摘要，不读取这段私聊的消息正文。撤回同意清除该对话缓存；授权或画像在请求中变化时不保存过期结果。话题只进入草稿，不自动代表用户发送。
 
-客户端应在 heartbeat/cancel 中携带收到的 `attemptId`；与当前轮次不符时只返回当前状态，不续在线或取消新轮次。离开页面时停止心跳即可，避免卸载请求取消另一标签页新开的轮次。每人同一时刻只能有一组候选；换人和确认都是同步状态转移，不会同时分配给多人。
+旧 `/pairing/*` 和 `/matches` 等兼容入口不承担当前异步匹配主流程；新客户端应使用 `/matching`。旧 `/people/:id/explain` 与 `/people/:id/icebreakers` 对真人只返回本地规则，提示进入已连接对话授权，不调用模型或搜索。旧体验入口仅对明确虚构的 demo 人物保留模型/向量功能，当前主界面不请求；真人匹配采用本地兴趣计算。
 
-退出登录、切换身份、删除账号、开始重建/导入/清除画像以及主动退出发现会立即撤销未完成配对。屏蔽会结束对应候选或已建连接的访问。已接受聊天保存在 SQLite；排队、候选与十分钟内的幂等结果只在单进程内存保存，服务重启后要主动重新开始。新 start 可以覆盖本人已连接的展示状态，已有聊天继续保留。
+## 问题小组与 AI 陪伴
 
-状态改变向相关两方发送 SSE `pairing` 和 `changed`，事件数据固定为 `{}`，前端再读取本人状态。无相应画像返回 400 `profile_required`，版本过期返回 409 `profile_changed`，画像正在更新返回 409 `profile_busy`，无权或未知配对返回 404 `pairing_missing`。`reason` 的 idle 原因包括 `cancelled`、`offline`、`queue_expired`、`profile_changed`、`account_changed`、`blocked`、`person_unavailable`；继续排队的原因包括 `skipped`、`peer_skipped`、`peer_left`、`proposal_expired`、`pair_unavailable`。notice 提供可直接展示的中文说明。
+小组统一位于 `/circles`：发现、推荐、显式加入/退出、轮次、消息、资料、AI 主持、成果版本、屏蔽、举报与自愿连接均见 [CIRCLES_API.md](CIRCLES_API.md)。非成员只读概要；成员及主持权限每次检查。小组邀请还要求双方成员允许连接及接收方全局邀请偏好，接受后才建立私聊。
 
-每用户 start 每分钟最多 12 次，heartbeat/respond 各最多 30 次。单进程最多容纳 200 位进行中的参与者，满员返回 429 `pairing_full`。自动化测试可通过 `createApp(config, {pairingOptions:{now, offlineMs, queueMs, proposalMs, sweepMs}})` 注入时钟与期限，生产环境不提供修改时间的 HTTP 接口。
+小组 `aiConsent` 控制本人发言能否进入外部 AI 主持上下文。主持的自动摘要默认关闭。资料/发言被隐藏、删除、屏蔽或 AI 授权撤回时，依赖它们的输出、版本和导出随权限失效；不可访问成果导出返回 `409 outcome_redacted`。
 
-所有配对响应中的 `queue` 都只含全站汇总：`waiting` 为持续在线的排队人数（包含等待中的本人），`confirming` 为候选确认中的人数，按用户去重；不统计只浏览者、体验人物和已连接用户。不返回队列名单。状态读取先按既有时限清理，但不会让读取者入队或续期。页面每 10 秒同步，并在断网时收起过期数字。
+| 方法与路径 | 请求或结果 |
+| --- | --- |
+| `GET /companion/sessions` | 本人 AI 会话列表 |
+| `POST /companion/sessions` | `{mode:'self'\|'partner',consent:true}`；最多保留二十段 |
+| `GET /companion/sessions/:id` | 本人会话与消息 |
+| `POST /companion/sessions/:id/messages` | `{text,clientMessageId,consent:true}`；文本最多 2000 字 |
+| `DELETE /companion/sessions/:id` | 删除该会话及关联建议 |
 
-## 邀请、对话与屏蔽
+AI 陪伴向配置模型发送本人画像摘要、本次输入及该 AI 会话最近十二条消息；不读取其他私聊。偏好版本变化后需新建授权会话，响应保存前也复查画像版本。相同重试键和相同内容返回既有结果；不同内容返回冲突。
 
-邀请弹窗只复制或经用户点击调用系统分享 `location.origin + '/#pairing'`，不附带用户 ID、会话或 Query。它是公开参与入口，不指定配对对象；接收者需要自己创建画像和点击开始。
+## 通知、复核与管理员
 
-| 方法与路径 | 输入 | 返回与行为 |
-| --- | --- | --- |
-| `GET /api/connections` | 无 | `{saved, invitations}`；邀请含 `id, direction, status, message, person, lastMessage` |
-| `POST /api/invitations` | `{targetId, message}`，消息 2–500 字符 | `201 {id}`；双方需在真实匹配池，体验人物不能邀请 |
-| `POST /api/invitations/:id/respond` | `{action:"accept"\|"decline"}` | `{ok:true}`；仅接收人可处理一次待处理邀请 |
-| `GET /api/conversations/:id` | 可选 `before=<消息ID>` | `{person, invitation, items, hasMore, nextBefore}`；每页最多 100 条，页内按发送顺序排列 |
-| `GET /api/conversations/:id/context` | 无 | `{shared, reasons, questions, mode:"rules"}`；恰好三条开场建议，仅读取双方真实画像 |
-| `POST /api/conversations/:id/icebreakers` | 空对象 | `{mode, questions, sourceIds, sources, sourceNotice, notice?}`；主动生成更多聊天灵感 |
-| `POST /api/conversations/:id/messages` | `{text, clientMessageId?}`，正文 1–2000 字符 | `201 {id, authorId, text, createdAt}`；仅已接受连接中的本人可发送 |
-| `POST /api/blocked/:id` | 空对象 | `{ok:true}`；取消双方邀请/连接、删除双向收藏、阻止画像与对话访问 |
-| `GET /api/blocked` | 无 | `{people:[{id,name}]}` |
-| `DELETE /api/blocked/:id` | 空对象 | `{ok:true}`；不会自动恢复旧邀请或聊天授权 |
+| 方法与路径 | 请求或结果 |
+| --- | --- |
+| `GET /notifications` | 最近一百条本人站内通知及未读总数 |
+| `POST /notifications/read` | `{ids?:string[]}`；省略 ids 标记全部已读 |
+| `GET /safety` | 本人的处理记录与当前有效限制 |
+| `POST /safety/:id/appeal` | `{text}`；5–1000 字，只能申诉本人案件 |
+| `POST /reports` | `{scope:'conversation',scopeId,messageId,reason}`；只能举报可访问对话中对方的真实发言 |
 
-`clientMessageId` 是可选 UUID，建议浏览器使用 `crypto.randomUUID()`。按作者、会话及此 ID 保证唯一；同一正文的网络重试返回原消息，同一 ID 搭配不同正文返回 409 `client_message_conflict`。前端在失败重试时保留 ID，编辑正文或发送成功后生成新 ID。省略此字段兼容旧客户端。SQLite 启动时自动迁移既有消息表，重启后仍能去重。
+后台产生的通知持久保存在站内，SSE 只在页面连接时提示刷新；**没有 WebPush、系统通知或邮件送达功能**。小组提醒还检查成员有效性与该组订阅设置，提醒不附私密正文。
 
-聊天上下文仅供已接受连接中的双方，私密画像的已建立连接也可使用。默认读取不调用知乎或模型、不写消息；双方缺少真实画像时返回 409 `conversation_profile_required`，不替换为演示画像。主动生成每用户每分钟最多 12 次，在搜索和模型调用结束后分别复查原会话、连接、屏蔽及双方画像版本；画像已变化返回 409 `conversation_profile_changed`。搜索或模型失败时保留三条明确标记的规则建议。点选建议只追加到当前草稿，超过 2000 字时保留原稿，由用户另行点击发送。
+管理员使用独立 `tongzhi_admin` 会话：先 `GET /admin/session` 获取管理员 CSRF，再 `POST /admin/login {username,password}`；写操作携带管理员 CSRF。普通用户 Cookie 不能访问管理接口。
 
-## 知乎连接与个人数据
+| 管理接口 | 用途与约束 |
+| --- | --- |
+| `GET /admin/overview`、`GET /admin/users`、`GET /admin/users/:id` | 注册统计、搜索及账号详情；邮箱搜索支持已绑定邮箱，列表/详情只显示邮箱掩码，不提供私聊正文 |
+| `POST /admin/users/:id/status` | `{status:'active'\|'disabled',reason}`；停用撤销全部会话、隐藏画像并使匹配失效；恢复不复活旧会话 |
+| `GET /admin/moderation?status=pending\|all` | 复核元数据列表，不附待审消息正文 |
+| `POST /admin/moderation/:id/open` | `{reason}`；记录阅读审计后返回案件正文及该私聊最多四条、每条最多 700 字的上下文 |
+| `POST /admin/moderation/:id/review` | `{action:'allow'\|'dismiss'\|'warn'\|'mute'\|'ban'}`；已处理案件重复操作返回 409 |
+| `GET /admin/circle-reports` | 列出待处理小组举报及被举报文本摘要，并记录阅读审计 |
+| `POST /admin/circle-reports/:id/resolve` | `{action:'hide'\|'dismiss'}`；记录处理审计，防止重复处理 |
+| `POST /admin/logout` | 结束管理员会话 |
 
-| 方法与路径 | 输入 | 返回与行为 |
-| --- | --- | --- |
-| `POST /api/auth/zhihu/start` | 空对象 | `{url}`；由浏览器跳转到知乎完成本人授权 |
-| `GET /auth/callback` | OAuth 原始 Query | `302` 原样转发 Query 至下方内部回调，兼容赛事生成器要求的路径后缀 |
-| `GET /api/auth/zhihu/callback` | `state` 和 `authorization_code` 或 `code` | 跳回 `/?auth=success\|failed\|state_error\|cancelled#profile` |
-| `GET /api/zhihu/validation` | 无 | `{report, connected, retryAt}`；只读取本人最近检查结果与当前连接状态，不发起外部请求 |
-| `POST /api/zhihu/validation` | `{consent:true}` | 同上；使用当前 OAuth 用户逐项检查五类公开数据，每项 `Limit=1` |
-| `POST /api/zhihu/import` | `{sources:["contents"\|"followees"\|"collections"], useAI?}` | `{count, counts, profile}`；仅用户主动勾选的来源，每类最多 10 项 |
-| `DELETE /api/zhihu/import` | 空对象 | `{profile}`；清除导入与数据检查记录、重新构建画像并清除当前 OAuth Token |
-| `GET /api/account/export` | 无 | JSON 附件，含当前用户、画像、导入、`zhihuValidation` 和收藏 |
-| `POST /api/logout` | 空对象 | `{ok:true}`；退出匹配、结束会话、清除 OAuth Token 与内存 AI 缓存 |
-| `DELETE /api/account` | `{confirm:"delete"}` | `{ok:true}`；删除该用户及会话、画像、导入、收藏、屏蔽、邀请、消息等关联记录 |
-| `GET /api/events` | EventSource 携带 Cookie | SSE 事件 `changed`、`pool`，25 秒心跳；用于触发界面刷新 |
+新私聊、小组消息及交流邀请均经过内容审核。模型已配置时，普通表达也尝试 AI 辅助判断，私聊附同一对话最近四条、每条最多 700 字的上下文，受共享五次/分钟预算约束。低风险内容遇模型超时、限流或不可用时按规则继续；显式风险内容仍暂缓投递，等待复核。高频重复内容也可暂缓投递，AI 不直接形成永久封禁。
 
-OAuth state 十分钟有效且只能使用一次。`/access_token` 使用表单交换，`/user` 仅发送用户 OAuth Bearer Token；创作摘要、关注及收藏列表同时发送应用 Access Secret、用户 `X-OAuth-Token` 和秒级时间戳。大整数 uid 从 JSON 解析开始无损保留，未获取有效身份时不创建登录身份。
+禁言通常为 24 小时；申诉本身不解除限制。申诉通过或驳回对应举报仅撤销该案件处罚，其他案件继续生效；管理员明确恢复账号可撤销账号现有处罚。停用账号无法再用原会话进入站内申诉页，需要管理员处理恢复。
 
-赛事登记可使用 `https://zhihupipei.aiimage.icu/auth/callback`。公开入口不交换 Token、不放宽 state 校验、不记录 Query，只作不可缓存的本站跳转；浏览器到达 `/api/auth/zhihu/callback` 后仍需原会话、一次性 state 和 `/api/auth/zhihu` 路径下的 OAuth Cookie。缺失或不匹配继续返回 `state_error`。
+## 导出、退出与注销
 
-OAuth Token 保存在服务端内存中，进程重启后需重新连接；不会下发到前端。Token 过期或鉴权错误时停止数据读取，保留已有应用身份，不退回应用开发者本人数据。请求频率或配额错误不撤销用户身份。搜索引用仅使用知乎返回的标题、摘要和官方 HTTPS 链接，不将摘要当全文。
+| 方法与路径 | 行为 |
+| --- | --- |
+| `GET /account/export` | 下载 `tongzhi-my-data.json`，包含当前本人画像、导入、检测报告、收藏 ID、偏好、可见建议/通知、本人小组内容及 AI 会话 |
+| `POST /logout` | 退出当前会话、将画像设为私有并忘记本服务内的知乎令牌；不会删除账号 |
+| `DELETE /account` | `{confirm:'delete'}`；删除当前账号及关联私有数据，清除或匿名化本人小组内容和依赖成果 |
 
-每次成功导入以本次勾选来源的结果覆盖上次导入，不累积历史。`collections` 对应近期收藏内容，不遍历全部收藏夹或完整收藏历史。导出接口只包含表中列出的用户资料、画像、导入和收藏，不包含聊天记录。
+当前个人 JSON 导出不包含双人私聊全文、密码哈希或 OAuth 令牌。小组成果 Markdown 导出仍受当前成员和来源权限检查。注销保留必要的无正文治理/审计记录，不应描述为清除了所有运维副本。
 
-## 模型与限制
-
-文本模型使用服务端 `SOUL_AI_BASE_URL`、`SOUL_AI_API_KEY`、`SOUL_AI_MODEL`。兼容根域名、`/v1` 或完整 `/chat/completions` 地址。当前验证过的组合是 `deepseek-v4-flash`、`SOUL_AI_JSON_MODE=true`、`SOUL_AI_DISABLE_THINKING=true`。JSON 模式默认启用；关闭思考默认关闭，通过环境变量按供应商支持情况启用。Anthropic Messages 协议使用自己的请求字段。
-
-仅配置文本模型不会启用语义向量；需单独提供真实的 `SOUL_EMBEDDING_MODEL`，其余 embedding URL/key 可单独配置或复用文本配置。若文本地址已包含 `/chat/completions`，向量需另设 `SOUL_EMBEDDING_BASE_URL`（例如以 `/v1` 结尾的基础地址）。批量向量按文本去重，在并发请求之间复用进行中的调用，并验证索引、维数、非零有限向量。未配置或失败时明确回退主题计算，不伪装成 embedding。
-
-文本与向量共用每分钟最多 5 次外部调用、最多 2 个并发请求。相同文本结果进行短期缓存，重复并发生成只调用一次。模型不合约、引用不存在、URL 编造、超时或服务故障都回到有说明的规则结果；输出检查不修改分数，也不替用户发送消息。清除缓存后，进行中的旧请求不会重新填入已清除内容。
-
-本地接口另有按身份的限流：画像 8 次/分钟、邀请 5 次/分钟、聊天 30 次/分钟、解释 15 次/分钟、破冰 12 次/分钟、导入 3 次/分钟。知乎业务请求每分钟最多 5 次，缓存与正在进行的相同请求不重复消耗调用。单进程内存限流和 SQLite 适合当前参赛部署；多实例部署需要共享限流、OAuth Token 与事件通道。
-
-### 知乎数据检查报告
-
-`report` 未检查时为 `null`；其他时候为：
-
-```ts
-{
-  checkedAt: string;
-  status: 'passed' | 'partial' | 'failed';
-  items: {
-    id: 'contents' | 'followees' | 'favlists' | 'favlist_contents' | 'collections';
-    label: string;
-    status: 'success' | 'empty' | 'error' | 'skipped';
-    count: 0 | 1 | null;
-    code: string | null;
-    message: string;
-  }[];
-}
-```
-
-检查固定读取创作、关注、收藏夹、首个收藏夹的内容和近期收藏。收藏夹 URL Token 仅在后端使用，并按有符号 Int64 无损校验。无收藏夹时不调用收藏夹内容接口，按官方 Skill 以 `empty` / `no_favorite_list` 记录，说明文字明确本项未读取；这不是该接口已发起请求的证明，也不算失败。其他请求的空列表只表示公开范围为空。授权或限流失败会停止后续读取，未做的项目为 `skipped`，不能记成空数据。
-
-`passed` 表示五项结果均为成功或按上述规则处理的空数据，`partial` 表示部分完成，`failed` 表示没有任何成功或空数据。HTTP 200 只代表得到了检查报告，应读取各项状态判断结果。检查前授权缺失、未经明确同意或正在冷却会直接返回错误，不覆盖上次报告。
-
-每用户每分钟最多发起 2 次检查。检查与导入、搜索共用每分钟 5 次知乎业务请求限制；开始完整检查需要一整个可用窗口，每一项仍经过正常限流。`retryAt` 是最早可再次尝试完整检查的时间；前端展示倒计时，不自动重试。出现日配额限制时等待次日恢复。
-
-只在 `zhihu_validations` 中保存本人最近一次的结果、条数、受控错误原因和时间，不保存检查读到的标题、正文、关注资料、收藏夹标识或授权材料；不会修改画像、导入、可发现状态或配对。`bootstrap.imports.checkedAt` 提供最近检查时间，用于清理入口。本人可下载报告，独立管理员可在用户详情中查看同一份结果；其他普通用户不能查询。清除导入或删除账号会移除检查记录。
+原项目数据迁移采用**快照导入、独立数据库运行，无持续同步**。新站的后续修改、导出和注销只作用于新站数据；旧站、迁移源快照和运维备份有各自的数据生命周期。

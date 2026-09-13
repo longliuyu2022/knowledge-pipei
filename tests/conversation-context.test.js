@@ -22,12 +22,13 @@ const modelConfig = () => {
 const completion = answer => json({ choices: [{ message: { content: JSON.stringify(answer) } }] });
 const messageCount = store => store.db.prepare('SELECT COUNT(*) AS count FROM messages').get().count;
 
-async function participants(service, { inputA = firstInput, inputB = secondInput, accepted = true, visible = false } = {}) {
+async function participants(service, { inputA = firstInput, inputB = secondInput, accepted = true, visible = false, aiConsent = true } = {}) {
   const a = service.client(), b = service.client();
   const aid = (await a.bootstrap()).user.id, bid = (await b.bootstrap()).user.id;
   service.store.saveProfile(aid, buildProfile(inputA), 0); service.store.saveProfile(bid, buildProfile(inputB), 0);
   if (visible || !accepted) { service.store.setDiscoverable(aid, true); service.store.setDiscoverable(bid, true); }
   const id = accepted ? service.store.connectPairing(randomUUID(), aid, bid, 1, 1) : service.store.invite(aid, bid, '一个虚构的待处理邀请');
+  if (aiConsent) for (const uid of [aid,bid]) service.store.db.prepare('INSERT INTO conversation_ai_consents VALUES (?,?,1,1,?)').run(id,uid,new Date().toISOString());
   return { a, b, aid, bid, id, get: `/api/conversations/${id}/context`, post: `/api/conversations/${id}/icebreakers` };
 }
 
@@ -55,7 +56,7 @@ test('opening a private accepted conversation returns three real-profile suggest
   for (let i = 0; i < 4; i++) replies.push(await peers.a.request(peers.get));
   for (const response of replies) {
     assert.equal(response.status, 200); assert.equal(response.data.mode, 'rules'); assert.equal(response.data.questions.length, 3);
-    assert.deepEqual(Object.keys(response.data).sort(), ['mode', 'questions', 'reasons', 'shared']);
+    assert.deepEqual(Object.keys(response.data).sort(), ['mode', 'questions', 'reasons', 'shared', 'aiConsent', 'generated', 'autoGenerate', 'generationKey'].sort());
     assert.deepEqual(response.data.shared.map(item => item.id).sort(), ['math', 'physics']);
     assert.ok(response.data.shared.every(item => Object.keys(item).sort().join(',') === 'id,label'));
     assert.equal(response.data.reasons.length, 3); assert.ok(response.data.questions[1].includes(secondInput.question));
@@ -110,7 +111,7 @@ test('both endpoints reject strangers, pending invitations, missing conversation
     assert.equal((await client.request(peers.get)).status, 404);
     assert.equal((await client.request(peers.post, { method: 'POST' })).status, 404);
   }
-  service.store.endSession(peers.a.jar.get('soul_session'));
+  service.store.endSession(peers.a.jar.get('tongzhi_session'));
   assert.equal((await peers.a.request(peers.get)).status, 401);
   assert.equal((await peers.a.request(peers.post, { method: 'POST' })).status, 401);
   assert.equal(searchCalls, 0); assert.equal(modelCalls, 0); assert.equal(messageCount(service.store), 0);
@@ -188,7 +189,10 @@ test('manual icebreakers use the shared per-user limiter without limiting passiv
   const service = await startService(t), peers = await participants(service); let searches = 0, models = 0;
   t.mock.method(service.zhihu, 'search', async () => { searches++; return { items: [], notice: null }; });
   t.mock.method(service.ai, 'icebreakers', async () => { models++; return { mode: 'rules', questions: generatedQuestions, sourceIds: [] }; });
-  for (let i = 0; i < 12; i++) assert.equal((await peers.a.request(peers.post, { method: 'POST' })).status, 200);
+  for (let i = 0; i < 12; i++) {
+    assert.equal((await peers.a.request(peers.post, { method: 'POST' })).status, 200);
+    service.store.db.prepare('DELETE FROM conversation_icebreakers WHERE conversation_id=?').run(peers.id);
+  }
   const limited = await peers.a.request(peers.post, { method: 'POST' });
   assert.equal(limited.status, 429); assert.equal(limited.headers.get('retry-after'), '60');
   assert.equal(searches, 12); assert.equal(models, 12);
@@ -262,4 +266,50 @@ test('a discovery visibility change during generation does not revoke an already
   pause.release();
   const response = await pending;
   assert.equal(response.status, 200); assert.equal(response.data.questions.length, 3); assert.equal(messageCount(service.store), 0);
+});
+
+test('AI context requires both individual consents and caches results without sending messages', async t => {
+  const service = await startService(t), peers = await participants(service,{aiConsent:false});
+  let calls = 0;
+  t.mock.method(service.zhihu,'search',async () => ({items:[source]}));
+  t.mock.method(service.ai,'icebreakers',async () => { calls++; return {mode:'model',questions:generatedQuestions,sourceIds:[source.id]}; });
+  const before = await peers.a.request(peers.get);
+  assert.deepEqual(before.data.aiConsent,{mine:false,other:false});
+  assert.equal(before.data.autoGenerate,false);
+  assert.equal((await peers.a.request(peers.post,{method:'POST'})).status,403);
+  const path = `/api/conversations/${peers.id}/ai-consent`;
+  assert.equal((await peers.a.request(path,{method:'POST',body:{enabled:true}})).data.autoGenerate,false);
+  assert.equal((await peers.a.request(peers.post,{method:'POST'})).status,403);
+  assert.equal((await peers.b.request(path,{method:'POST',body:{enabled:true}})).data.autoGenerate,true);
+  const result = await peers.a.request(peers.post,{method:'POST'});
+  assert.equal(result.status,200); assert.equal(result.data.mode,'model');
+  assert.deepEqual((await peers.a.request(peers.post,{method:'POST'})).data,result.data);
+  assert.deepEqual((await peers.a.request(peers.get)).data.generated,result.data);
+  assert.equal(calls,1); assert.equal(messageCount(service.store),0);
+  assert.equal((await peers.b.request(path,{method:'POST',body:{enabled:false}})).status,200);
+  assert.equal((await peers.a.request(peers.get)).data.generated,null);
+  assert.equal(service.store.db.prepare('SELECT COUNT(*) AS n FROM conversation_icebreakers').get().n,0);
+});
+
+for (const stage of ['search','model']) test(`AI context discards pending ${stage} after either participant withdraws`, async t => {
+  const service = await startService(t), peers = await participants(service), gate = deferred();
+  t.after(gate.release);
+  t.mock.method(service.zhihu,'search',async () => { if (stage==='search') await gate.wait(); return {items:[source]}; });
+  t.mock.method(service.ai,'icebreakers',async () => { if (stage==='model') await gate.wait(); return {mode:'model',questions:generatedQuestions,sourceIds:[source.id]}; });
+  const pending = peers.a.request(peers.post,{method:'POST'}); await gate.started;
+  assert.equal((await peers.b.request(`/api/conversations/${peers.id}/ai-consent`,{method:'POST',body:{enabled:false}})).status,200);
+  gate.release();
+  const result = await pending;
+  assert.equal(result.status,409); assert.equal(result.data.error.code,'conversation_consent_changed');
+  assert.equal(service.store.db.prepare('SELECT COUNT(*) AS n FROM conversation_icebreakers').get().n,0);
+});
+
+test('accepted group peers without knowledge profiles use only their recorded common question', async t => {
+  const service = await startService(t), peers = await participants(service,{aiConsent:false});
+  service.store.db.prepare('INSERT INTO connection_context VALUES (?,?,?,?,?)').run(peers.id,'circle','fictional-previous-group','如何比较两种学习方法的效果？',new Date().toISOString());
+  service.store.db.prepare('DELETE FROM profiles WHERE user_id IN (?,?)').run(peers.aid,peers.bid);
+  const result = await peers.a.request(peers.get);
+  assert.equal(result.status,200); assert.deepEqual(result.data.shared,[]);
+  assert.match(result.data.questions[1],/如何比较两种学习方法/);
+  assert.doesNotMatch(JSON.stringify(result.data),/CANARY|体验人物|示例画像/);
 });

@@ -1,7 +1,7 @@
 import { spawn } from 'node:child_process';
 import { projectRoot } from './config.js';
 
-const env = { ...process.env, SOUL_PUBLIC_ORIGIN: '' };
+const env = { ...process.env, SOUL_PUBLIC_ORIGIN: '', TONGZHI_PUBLIC_ORIGIN: '' };
 const children = [
   spawn(process.execPath, ['--watch', 'server/index.js'], { cwd: projectRoot, stdio: 'inherit', env }),
   spawn(process.execPath, ['node_modules/vite/bin/vite.js', '--host', '127.0.0.1'], { cwd: projectRoot, stdio: 'inherit', env }),

@@ -22,7 +22,7 @@ export function ProfileWizard({ data, onClose, onComplete, notify }: WizardProps
     name: data.user.provider === 'zhihu' ? data.user.name : '', topicIds: [], about: '', question: '', styleId: 'deep', goals: ['conversation'],
   });
   const [revision, setRevision] = useState(data.profile?.revision || 0);
-  const [useAI, setUseAI] = useState(data.capabilities.ai);
+  const [useAI, setUseAI] = useState(false);
   const [discoverable, setDiscoverable] = useState(false);
   const [savedProfile, setSavedProfile] = useState<Profile | null>(null);
   const [busy, setBusy] = useState(false);
@@ -178,9 +178,9 @@ export function ProfileWizard({ data, onClose, onComplete, notify }: WizardProps
           </label>
           <label className="wizard-consent">
             <input type="checkbox" checked={discoverable} onChange={event => setDiscoverable(event.target.checked)} />
-            <span><strong><Eye size={16} />生成后，让伙伴发现我</strong><small>主动加入真实参与者匹配。昵称、画像、自述、问题和交流偏好将对伙伴可见；你可以随时在设置中关闭。</small></span>
+            <span><strong><Eye size={16} />生成后，让伙伴发现我</strong><small>公开知识名片，让参与者查看你的昵称、画像、自述和交流偏好；后台异步匹配需要你另行点击开始。</small></span>
           </label>
-          <div className="wizard-privacy-note"><LockKeyhole size={15} /><p>{discoverable ? '已选择加入匹配。导入的原始摘要只在你的资料页展示。' : '默认不加入匹配池。生成后可先查看画像，再决定是否让新伙伴发现。已建立连接的伙伴仍可查看你的公开资料。'}</p></div>
+          <div className="wizard-privacy-note"><LockKeyhole size={15} /><p>{discoverable ? '已选择公开知识名片。原始导入摘要仅自己可见。' : '默认保持名片私有。你可以带着这份画像开始异步匹配或参加问题小组；已建立连接的伙伴可查看你分享的名片。'}</p></div>
         </div>}
       </fieldset>
       {error && <div className="form-error wizard-error" role="alert"><p>{error}</p>{conflict && <button type="button" className="text-button" disabled={busy} onClick={loadLatest}>载入最新资料后继续</button>}</div>}

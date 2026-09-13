@@ -1,6 +1,10 @@
 node_modules/
 dist/
 data/
+*.sqlite
+*.sqlite-*
+*.db
+*.db-*
 .env
 .env.*
 !.env.example
@@ -8,3 +12,4 @@ data/
 .mindfs/
 artifacts/*.webm
 artifacts/*.zip
+artifacts/*failure*.png

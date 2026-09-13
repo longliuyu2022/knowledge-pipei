@@ -1,0 +1,74 @@
+{
+  "status": "passed",
+  "startedAt": "2026-09-13T08:58:11.171Z",
+  "checks": [
+    {
+      "label": "新用户首页展示问题，五项导航与无虚构画像状态正确",
+      "status": "passed",
+      "elapsedMs": 1056
+    },
+    {
+      "label": "邮箱注册保留访客资料，偏好需要本人主动启用",
+      "status": "passed",
+      "elapsedMs": 1021
+    },
+    {
+      "label": "AI 对话创建与发送均需授权，输入上限与后端一致",
+      "status": "passed",
+      "elapsedMs": 543
+    },
+    {
+      "label": "AI 发送结果丢失后保留草稿，相同重试标识不会重复写入",
+      "status": "passed",
+      "elapsedMs": 235
+    },
+    {
+      "label": "AI 回应期间修改的下一条草稿不会被清空",
+      "status": "passed",
+      "elapsedMs": 171
+    },
+    {
+      "label": "切换 AI 会话重新确认授权，删除会话有明确确认",
+      "status": "passed",
+      "elapsedMs": 854
+    },
+    {
+      "label": "知识建议只允许勾选本人消息，人工确认后才更新画像",
+      "status": "passed",
+      "elapsedMs": 1079
+    },
+    {
+      "label": "匹配支持七天请求、暂停与恢复，双方确认前不建私聊",
+      "status": "passed",
+      "elapsedMs": 1211
+    },
+    {
+      "label": "匹配对话与通知深链准确定位私聊，不会再次匹配",
+      "status": "passed",
+      "elapsedMs": 1344
+    },
+    {
+      "label": "举报针对对方实际消息，处理记录可由当事人提交申诉",
+      "status": "passed",
+      "elapsedMs": 1775
+    },
+    {
+      "label": "打开同题深链只查看公开概要，不会自动加入",
+      "status": "passed",
+      "elapsedMs": 286
+    },
+    {
+      "label": "桌面、390 与 320 像素页面和导航均无横向溢出",
+      "status": "passed",
+      "elapsedMs": 4192
+    },
+    {
+      "label": "页面与静态资源无运行错误",
+      "status": "passed",
+      "elapsedMs": 1
+    }
+  ],
+  "pageErrors": [],
+  "assetErrors": [],
+  "finishedAt": "2026-09-13T08:58:34.722Z"
+}

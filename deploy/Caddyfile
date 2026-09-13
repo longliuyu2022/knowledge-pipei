@@ -1,6 +1,0 @@
-zhihupipei.aiimage.icu {
-    encode zstd gzip
-    reverse_proxy 127.0.0.1:3022 {
-        flush_interval -1
-    }
-}

@@ -345,3 +345,7 @@
   .conversation-keyboard-tip { font-size: 8px; }
   .conversation-message-count { display: none; }
 }
+
+.conversation-starter-consent { display: flex; align-items: flex-start; gap: 9px; margin: 14px 0 10px; color: var(--text-secondary, #6b6372); font-size: 12px; line-height: 1.65; }
+.conversation-starter-consent input { flex: 0 0 auto; margin: 4px 0 0; accent-color: #7250bd; }
+.conversation-starter-consent span { min-width: 0; overflow-wrap: anywhere; }

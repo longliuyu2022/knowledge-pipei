@@ -1,70 +1,54 @@
-# 部署与维护
+# 同知部署与更新
 
-当前目标站点：`https://zhihupipei.aiimage.icu`。
+生产域名 `https://zhihu.aiimage.icu`，Node.js 22.16+，Caddy 反向代理，单进程 Express + SQLite。线上仅监听 `127.0.0.1:3033`。同题 3011、同频 3022 保持各自独立运行。
 
-## 运行结构
+## 文件与凭证
 
-```text
-HTTPS 443 · Caddy
-    → 127.0.0.1:3022 · soulmatch.service
-        → dist/ 前端
-        → /api Express 服务
-        → data/soulmatch.sqlite
-        → 服务端配置的文本模型与可选知乎 API
-```
+| 路径 | 用途 |
+| --- | --- |
+| `/root/xiangmu/zhihu-tongzhi` | 当前独立项目 |
+| `data/tongzhi.sqlite` | 生产数据库，目录 0700、文件 0600 |
+| `/etc/tongzhi/model.json` | 私有模型配置，包含 `api_key`、`base_url`、`model`、`protocol` |
+| `/etc/tongzhi/zhihu_app_key` | 知乎 App Key |
+| `/etc/tongzhi/zhihu_access_secret` | 授权用户数据及搜索所需的 Access Secret |
+| `/etc/tongzhi/admin_password_hash` | 独立管理员 scrypt 密码哈希 |
+| `/etc/systemd/system/tongzhi.service` | 服务单元 |
+| `/etc/caddy/sites.d/zhihu-tongzhi.caddy` | 该域名的代理配置 |
 
-源码目录：`/root/xiangmu/fanganer`。私有配置：`.env.local`，权限 `0600`。数据库及其 WAL 位于 `data/`，不进入代码仓库。systemd 使用严格只读的程序目录和可写数据目录，自动重启与开机启动。
+`/etc/tongzhi` 为 0700，凭证文件为 0600。systemd 的 `LoadCredential` 在运行时提供密钥，模型文件通过 `%d/model_config` 引用。管理员账号沿用同频原有 `admin` 与密码哈希，不在新项目中创建默认明文密码。
 
-知乎 App Key 和 Access Secret 单独使用 systemd Credentials：仓库外的 `/etc/soulmatch/` 保存 `0600` 凭证文件，`soulmatch.service.d/zhihu.conf` 通过 `LoadCredential` 挂载给服务。代码从 `CREDENTIALS_DIRECTORY` 读取，也支持显式的 `ZHIHU_OAUTH_APP_KEY_FILE` / `ZHIHU_ACCESS_SECRET_FILE`。公开 App ID 与回调从 `hackathon.config.json` 读取。参见 [凭证模板](../deploy/zhihu-credentials.conf.example) 与 [官方 Skill 初始化记录](ZHIHU_SETUP.md)。
+首次复制配置文件时按 [.env.example](../.env.example) 与 [服务单元](../deploy/tongzhi.service) 填写自己的路径；禁止将私有文件提交到 Git，也不使用 `VITE_` 变量承载密钥。
 
-管理后台位于 `/admin`，使用独立登录。`soulmatch.service.d/admin.conf` 通过 `LoadCredential=admin_password_hash:/etc/soulmatch/admin_password_hash` 注入 scrypt 哈希。初始随机密码单独交付，哈希和密码均不进入 Git。配置与密码重置见 [后台说明](ADMIN.md) 和 [管理员凭证模板](../deploy/admin-credentials.conf.example)。
+## 当前部署
 
-## 安装与启动
+1. `npm ci`、`npm test` 和 `npm run build` 成功。
+2. 在服务启动前，从只读一致性快照预演并迁移到空目标，执行 [迁移工具](MIGRATION.md) 的 `validate`。
+3. 安装服务单元，运行 `systemctl daemon-reload`、`systemctl enable --now tongzhi`。
+4. 确认 `http://127.0.0.1:3033/api/health` 返回 `2.0.0`。
+5. 安装本站 Caddy 配置，先 `caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile`，再 `caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile`。
+6. 通过公网检查健康、资源、普通用户隔离、管理员登录与准确回调。原有服务不需要重启。
 
-在目标服务器修改 [服务模板](../deploy/soulmatch.service) 中的绝对路径，确保 Node 22.13+ 可用。安装依赖并构建，再创建数据目录、安装 service 并启动：
+应用使用 `tongzhi_session`、`tongzhi_oauth` 和 `tongzhi_admin` Cookie。重启会清理内存中的 OAuth 令牌与管理员会话，异步匹配、普通账号、站内通知及讨论保存在数据库中。
+
+## 更新与验证
+
+先完成代码和隔离测试，保留当前构建及一致性数据库快照，再替换构建、只重启 `tongzhi`。有数据库结构变化时先核对兼容性，避免覆盖运行中的 WAL 主文件。
 
 ```bash
-npm ci
+npm test
 npm run build
-install -d -m 700 /root/xiangmu/fanganer/data
-install -m 644 deploy/soulmatch.service /etc/systemd/system/soulmatch.service
-systemctl daemon-reload
-systemctl enable --now soulmatch.service
+systemctl restart tongzhi
+node scripts/verify-deployment.mjs
 ```
 
-[Caddy 站点模板](../deploy/Caddyfile) 代理至 3022，自动办理 HTTPS。当前服务器将它安装在 `/etc/caddy/sites.d/zhihupipei.caddy`，主配置仅增加对应 import，原配置备份位于 `/etc/caddy/backups/`。
+验证脚本会建立自己的临时访客，检查后删除，只读取公开资料，不执行真人 OAuth。设置 `TONGZHI_VERIFY_REPORT` 可保存结构化结果；可选 `TONGZHI_ADMIN_ACCESS_FILE` 指向服务器私有的 `{username,password}` JSON，仅用于管理员验证，脚本不输出凭证。不要把该私有 JSON 写入仓库。
 
-```bash
-caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
-systemctl reload caddy
-curl --fail https://zhihupipei.aiimage.icu/api/health
-```
+线上健康使用 `/api/health` 与业务监控。迁移 `validate` 校验的是首次导入快照，服务已经正常产生新写入后，不应再用旧导入指纹判断系统异常。
 
-更新时先完成测试和构建，再重启应用。变更配置后也需要重启：
+## 数据来源与回滚
 
-```bash
-systemctl restart soulmatch
-systemctl is-active soulmatch
-journalctl -u soulmatch -n 30 --no-pager
-```
+本次是新目录、新域名的独立部署，迁入截至 **2026-09-13 17:25:31（Asia/Shanghai）** 的源快照。旧站仍可独立访问，之后的新内容不自动同步；两边不共用数据库、会话或匹配请求。若将来彻底合站，需要另行设计最终写入窗口和增量对账，不能直接覆盖已有新数据。
 
-## 验证公网
+部署失败且新库尚无新写入时，可恢复上一份代码和代理配置；原两站仍可使用。新库已有写入时，先停新服务并保全一致性快照，再决定代码回滚或向前修复；不能用源快照覆盖当前库。Caddy 只替换同知站点配置，不回滚整份全站配置而影响其他应用。
 
-```bash
-node scripts/verify-live.mjs
-```
-
-此命令使用真实 HTTPS 页面，验证 Secure/HttpOnly Cookie，并创建一个不公开的临时验收画像，实际调用画像、解释、破冰三项模型能力。会消耗至多三次业务调用，完成后删除验收账号。结果保存于 `artifacts/public-validation.json`；截图与参赛封面、icon 同时生成。日常健康检查只需要 `/api/health`，不必重复运行真实模型验收。
-
-## 数据与边界
-
-- SQLite 单实例持久化，备份时使用 SQLite 在线备份或先停止服务再复制数据库及相关 WAL；不要仅复制正在写入的主文件。
-- OAuth Token 留在进程内存，重启后用户需要主动重连，已保存的应用画像与聊天仍存在。
-- 在线配对队列留在当前进程，重启后需要用户重新点击开始；已经双向确认的连接和消息持久保存。前端每 10 秒发心跳，45 秒无心跳退出，单轮排队上限 3 分钟，候选确认上限 60 秒。
-- 开启知乎前登记准确回调地址；平台必须可靠回传 state，否则保持拒绝登录。
-- 多实例运行需要将 Token、限流、实时事件和会话迁移至共享存储。
-- 如需下线，仅停止 `soulmatch` 并移除这一条 Caddy import；不修改其他站点配置。
-
-## 本轮功能的轻量公网检查
-
-`node scripts/verify-next-live.mjs` 核对部署产物、真实队列汇总、邀请链接和新接口权限。只创建并清除一个未建立画像的临时访客，不进入队列、不调用真实模型或知乎。报告为 `artifacts/next-public-validation.json`；不能将此检查当作真实 OAuth 数据验收。
+私有备份与验证记录保存在 `/root/.local/share/tongzhi`。备份属于受控运维数据，恢复前需核对快照之后的删除与撤回记录；不承诺在线注销能召回已经下载的副本。

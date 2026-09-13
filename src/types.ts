@@ -51,7 +51,7 @@ export interface Bootstrap {
 export interface Explanation { mode: AnalysisMode; reasons: string[]; bridge: string; notice?: string }
 export interface Source { id: string; title: string; summary: string; author: string; url: string; scope: string }
 export interface Icebreakers { mode: AnalysisMode; questions: string[]; sourceIds: string[]; sources: Source[]; notice?: string; sourceNotice?: string }
-export interface ConversationContext { shared: { id: string; label: string }[]; reasons: string[]; questions: string[]; mode: 'rules' }
+export interface ConversationContext { shared: { id: string; label: string }[]; reasons: string[]; questions: string[]; mode: 'rules'; aiConsent: {mine: boolean; other: boolean}; generated: Icebreakers | null; autoGenerate: boolean; generationKey: string }
 export interface ZhihuValidationReport {
   checkedAt: string;
   status: 'passed' | 'partial' | 'failed';

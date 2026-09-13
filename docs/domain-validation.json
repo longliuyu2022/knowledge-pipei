@@ -1,0 +1,102 @@
+{
+  "checkedAt": "2026-09-13T07:37:33.538Z",
+  "origin": "https://zhihu.aiimage.icu",
+  "release": "preparation-page",
+  "checks": [
+    {
+      "name": "HTTP redirects to its own HTTPS origin",
+      "passed": true,
+      "detail": {
+        "status": 308,
+        "location": "https://zhihu.aiimage.icu/"
+      }
+    },
+    {
+      "name": "HTTPS serves the new project directly",
+      "passed": true,
+      "detail": {
+        "status": 200,
+        "tlsVerified": true
+      }
+    },
+    {
+      "name": "Stylesheet loads",
+      "passed": true,
+      "detail": {
+        "status": 200
+      }
+    },
+    {
+      "name": "Project files and application API are not exposed by the static page",
+      "passed": true,
+      "detail": {
+        "documentationStatus": 404,
+        "apiStatus": 404
+      }
+    },
+    {
+      "name": "Static page creates no application session",
+      "passed": true
+    }
+  ],
+  "viewports": [
+    {
+      "width": 1440,
+      "height": 1000,
+      "passed": true,
+      "scrollWidth": 1440,
+      "cards": [
+        {
+          "text": "同题↗",
+          "url": "https://zhihushequn.aiimage.icu/"
+        },
+        {
+          "text": "同频↗",
+          "url": "https://zhihupipei.aiimage.icu/"
+        }
+      ],
+      "title": "同知 · 因问题相聚，因知识同频",
+      "heading": "因问题相聚，因知识同频。",
+      "errors": []
+    },
+    {
+      "width": 390,
+      "height": 844,
+      "passed": true,
+      "scrollWidth": 390,
+      "cards": [
+        {
+          "text": "同题↗",
+          "url": "https://zhihushequn.aiimage.icu/"
+        },
+        {
+          "text": "同频↗",
+          "url": "https://zhihupipei.aiimage.icu/"
+        }
+      ],
+      "title": "同知 · 因问题相聚，因知识同频",
+      "heading": "因问题相聚，因知识同频。",
+      "errors": []
+    },
+    {
+      "width": 320,
+      "height": 740,
+      "passed": true,
+      "scrollWidth": 320,
+      "cards": [
+        {
+          "text": "同题↗",
+          "url": "https://zhihushequn.aiimage.icu/"
+        },
+        {
+          "text": "同频↗",
+          "url": "https://zhihupipei.aiimage.icu/"
+        }
+      ],
+      "title": "同知 · 因问题相聚，因知识同频",
+      "heading": "因问题相聚，因知识同频。",
+      "errors": []
+    }
+  ],
+  "passed": true
+}

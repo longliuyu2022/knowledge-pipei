@@ -50,7 +50,7 @@ async function downloadCard(profile: Profile, sample: boolean) {
   ctx.fillStyle = background; ctx.fillRect(0, 0, 800, 1100);
   ctx.strokeStyle = '#e5e0ee'; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.roundRect(28, 28, 744, 1044, 25); ctx.stroke();
-  ctx.fillStyle = '#494050'; ctx.font = `600 27px ${font}`; ctx.fillText('同频', 72, 87);
+  ctx.fillStyle = '#494050'; ctx.font = `600 27px ${font}`; ctx.fillText('同知', 72, 87);
   ctx.fillStyle = '#a8a0b3'; ctx.font = `12px ${font}`; ctx.textAlign = 'right'; ctx.fillText('KNOWLEDGE PERSONA', 726, 85); ctx.textAlign = 'left';
   rounded(72, 115, sample ? 188 : 146, 32, 16, '#eae5f6');
   ctx.font = `13px ${font}`; ctx.fillStyle = '#8277ae'; ctx.fillText(sample ? '知识人格 · 体验示例' : '我的知识人格卡', 86, 136);
@@ -91,7 +91,7 @@ async function downloadCard(profile: Profile, sample: boolean) {
   ctx.textAlign = 'right'; ctx.fillText(profile.analysis.mode === 'model' ? 'AI 兴趣解读' : '基于所选兴趣', 728, 1040);
   const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error('图片生成失败，请重试。')), 'image/png'));
   const url = URL.createObjectURL(blob), link = document.createElement('a');
-  link.href = url; link.download = `同频-${sample ? '体验示例' : '知识人格卡'}.png`; document.body.appendChild(link); link.click(); link.remove();
+  link.href = url; link.download = `同知-${sample ? '体验示例' : '知识人格卡'}.png`; document.body.appendChild(link); link.click(); link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
@@ -130,7 +130,7 @@ export function ProfilePage({ actions }: { actions: PageActions }) {
       await api('/profile/visibility', { method: 'POST', json: { discoverable: !profile.discoverable, revision: profile.revision } });
       saved = true;
       await actions.refresh();
-      actions.notify(profile.discoverable ? '已退出匹配池，新的伙伴将无法发现你。已建立的连接保留。' : '已加入匹配池，去发现同频的伙伴吧。');
+      actions.notify(profile.discoverable ? '已隐藏公开知识名片。异步匹配请在「找同频的人」中单独暂停或取消。' : '已公开知识名片。可以开始异步匹配，或加入相关问题小组。');
     } catch (cause) { actions.notify((saved ? '设置已保存，页面刷新未完成。' : '') + messageOf(cause), true); }
     finally { pending.current = false; setVisibilityBusy(false); }
   }
@@ -175,8 +175,8 @@ export function ProfilePage({ actions }: { actions: PageActions }) {
       <div className="profile-source-footnote"><LockKeyhole size={14} /><p>{isSample ? '此处展示的是示例的分析依据。你的真实资料只会来自你主动选择、填写或授权导入的内容。' : '这些依据仅自己可见。知乎导入范围为你选择的公开标题、摘要与简介，可在设置中清除。'}</p></div>
     </section>
 
-    {!isSample && <section className="profile-visibility-panel"><span className="profile-visibility-icon">{profile.discoverable ? <Eye size={22} /> : <LockKeyhole size={22} />}</span><div><h3>{profile.discoverable ? '同频的伙伴，已经可以发现你' : '你目前没有加入匹配池'}</h3><p>{profile.discoverable ? '你的昵称、画像、自述、问题与交流偏好对真实参与者可见。关闭后会取消等待中的邀请，已建立的连接保留。' : '加入后，伙伴可查看昵称、兴趣画像、自述、问题与交流偏好。已建立连接的伙伴仍可查看公开资料，原始导入摘要仅自己可见。'}</p></div><button className={`button ${profile.discoverable ? 'secondary' : 'primary'}`} onClick={toggleVisibility} disabled={visibilityBusy}>{visibilityBusy ? <Spinner text="正在保存…" /> : profile.discoverable ? '暂时退出匹配' : '让伙伴发现我'}</button></section>}
+    {!isSample && <section className="profile-visibility-panel"><span className="profile-visibility-icon">{profile.discoverable ? <Eye size={22} /> : <LockKeyhole size={22} />}</span><div><h3>{profile.discoverable ? '你的知识名片已公开' : '你的知识名片目前仅向已连接伙伴分享'}</h3><p>{profile.discoverable ? '你的昵称、画像、自述、问题与交流偏好对真实参与者可见。关闭后会取消等待中的邀请，已建立的连接保留。' : '加入后，伙伴可查看昵称、兴趣画像、自述、问题与交流偏好。已建立连接的伙伴仍可查看公开资料，原始导入摘要仅自己可见。'}</p></div><button className={`button ${profile.discoverable ? 'secondary' : 'primary'}`} onClick={toggleVisibility} disabled={visibilityBusy}>{visibilityBusy ? <Spinner text="正在保存…" /> : profile.discoverable ? '隐藏公开名片' : '公开知识名片'}</button></section>}
 
-    <div className="profile-endnote"><span>{!isSample && profile.updatedAt && !Number.isNaN(Date.parse(profile.updatedAt)) ? `最近更新于 ${formatTime(profile.updatedAt)}` : '每一次新的好奇，都会让这幅画像更丰富'}</span><button className="text-button" onClick={() => actions.navigate('discover')}>去遇见同频的人<ArrowRight size={15} /></button></div>
+    <div className="profile-endnote"><span>{!isSample && profile.updatedAt && !Number.isNaN(Date.parse(profile.updatedAt)) ? `最近更新于 ${formatTime(profile.updatedAt)}` : '每一次新的好奇，都会让这幅画像更丰富'}</span><button className="text-button" onClick={() => actions.navigate('pairing')}>去寻找同频的人<ArrowRight size={15} /></button></div>
   </div>;
 }

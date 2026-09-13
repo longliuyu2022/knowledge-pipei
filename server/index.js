@@ -4,7 +4,7 @@ import { createApp } from './app.js';
 const config = loadConfig();
 const service = createApp(config);
 const server = service.app.listen(config.port, config.host, () => {
-  console.log(`同频已启动：http://${config.host}:${config.port}`);
+  console.log(`同知已启动：http://${config.host}:${config.port}`);
   console.log(`文本分析：${config.ai.configured ? '已配置模型' : '规则模式'}；知乎登录：${config.zhihu.oauthConfigured ? '已配置' : '尚未配置'}`);
 });
 let stopping = false;

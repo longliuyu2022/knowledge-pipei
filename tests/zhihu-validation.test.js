@@ -128,7 +128,7 @@ test('concurrent checks do not double-read data and a revoked application sessio
   const client = service.client(); const boot = await client.bootstrap(); authorizeLocally(service, boot.user.id);
   const pending = checkRequest(client); await started;
   const second = await checkRequest(client); assert.equal(second.status, 409); assert.equal(second.data.error.code, 'profile_busy');
-  service.store.endSession(client.jar.get('soul_session'));
+  service.store.endSession(client.jar.get('tongzhi_session'));
   release(); const response = await pending;
   assert.equal(response.status, 401); assert.equal(calls, 1); assert.equal(service.store.zhihuValidation(boot.user.id), null);
 });

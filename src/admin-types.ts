@@ -13,6 +13,8 @@ export interface AdminOverview {
   counts: {
     totalUsers: number;
     zhihuUsers: number;
+    emailUsers: number;
+    disabledUsers: number;
     guestUsers: number;
     profileUsers: number;
     discoverableUsers: number;
@@ -22,8 +24,11 @@ export interface AdminOverview {
     messages: number;
   };
   pairing: { searching: number; proposed: number };
+  matching: { searching: number; proposed: number; paused: number; fulfilled: number; cancelled: number; expired: number };
+  circles: { total: number; active: number; outcomes: number; openReports: number };
+  moderation: { pending: number; restrictions: number };
   interests: { id: string; label: string; count: number }[];
-  registrations: { date: string; zhihu: number; guest: number }[];
+  registrations: { date: string; zhihu: number; guest: number; email: number }[];
 }
 
 export interface AdminUserRow {
@@ -31,6 +36,9 @@ export interface AdminUserRow {
   name: string;
   avatar: string;
   provider: string;
+  status: 'active' | 'disabled';
+  emailMasked: string | null;
+  hasEmail: boolean;
   createdAt: string;
   registeredAt: string | null;
   lastSeenAt: string | null;
@@ -47,7 +55,7 @@ export interface AdminUserRow {
 
 export interface AdminUserFilters {
   q: string;
-  provider: 'all' | 'zhihu' | 'guest';
+  provider: 'all' | 'zhihu' | 'guest' | 'email';
   profile: 'all' | 'ready' | 'empty';
   visibility: 'all' | 'public' | 'private';
   topic: string;
@@ -63,6 +71,7 @@ export interface AdminUsers {
 }
 
 export interface AdminUserDetail {
+  governance: { sanctions: { id: string; kind: string; reason: string; expiresAt: string | null }[]; circles: number };
   zhihuValidation: ZhihuValidationReport | null;
   user: AdminUserRow;
   profile: null | {
@@ -88,4 +97,35 @@ export interface AdminUserDetail {
     importedItems: number;
     importedAt: string | null;
   };
+}
+
+export interface AdminModerationCase {
+  id: string;
+  userId: string | null;
+  userName: string | null;
+  scope: string;
+  scopeId: string;
+  reason: string;
+  decision: string;
+  status: string;
+  createdAt: string;
+  resolvedAt: string | null;
+  appeal: string | null;
+  delivered: boolean | number;
+}
+
+export interface AdminOpenedCase {
+  case: AdminModerationCase & { text: string };
+  context: { speaker: 'subject' | 'other'; text: string }[];
+}
+
+export interface AdminCircleReport {
+  id: string;
+  circleId: string;
+  circleTitle: string;
+  messageId: string;
+  reason: string;
+  status: string;
+  createdAt: string;
+  text: string;
 }

@@ -211,10 +211,10 @@ await runBrowserSuite('admin', async ({ newContext, origin, check, artifactsDir,
       assert.equal(userCount(), records.length); assert.equal(ordinarySessionCount(), sessionCount);
       assert.deepEqual(normalAdminRequests, []);
       const cookies = await context.cookies(origin + '/api/admin/session');
-      const cookie = cookies.find(value => value.name === 'soul_admin');
+      const cookie = cookies.find(value => value.name === 'tongzhi_admin');
       assert.ok(cookie); assert.equal(cookie.httpOnly, true); assert.equal(cookie.sameSite, 'Strict'); assert.equal(cookie.path, '/api/admin');
-      assert.equal(cookies.some(value => value.name === 'soul_session'), false);
-      assert.equal((await page.evaluate(() => document.cookie)).includes('soul_admin'), false);
+      assert.equal(cookies.some(value => value.name === 'tongzhi_session'), false);
+      assert.equal((await page.evaluate(() => document.cookie)).includes('tongzhi_admin'), false);
     });
 
     await check('匿名及普通用户会话均无法读取管理概况、列表或画像详情', async () => {
@@ -239,10 +239,10 @@ await runBrowserSuite('admin', async ({ newContext, origin, check, artifactsDir,
     });
 
     await check('真实 UI 登录成功并轮换管理员凭证，普通访客和会话总数保持不变', async () => {
-      const before = (await context.cookies(origin + '/api/admin/session')).find(value => value.name === 'soul_admin').value;
+      const before = (await context.cookies(origin + '/api/admin/session')).find(value => value.name === 'tongzhi_admin').value;
       const anonymous = await api(context, 'GET', '/session');
       await login();
-      const after = (await context.cookies(origin + '/api/admin/session')).find(value => value.name === 'soul_admin').value;
+      const after = (await context.cookies(origin + '/api/admin/session')).find(value => value.name === 'tongzhi_admin').value;
       const current = await api(context, 'GET', '/session');
       assert.equal(current.authenticated, true); assert.equal(current.username, username);
       assert.notEqual(after, before); assert.notEqual(current.csrf, anonymous.csrf);
@@ -255,6 +255,7 @@ await runBrowserSuite('admin', async ({ newContext, origin, check, artifactsDir,
       const expected = {
         totalUsers: records.length, zhihuUsers: records.filter(record => record.user.provider === 'zhihu').length,
         guestUsers: records.filter(record => record.user.provider === 'guest').length,
+        emailUsers: 0, disabledUsers: 0,
         profileUsers: records.filter(record => record.profile).length,
         discoverableUsers: records.filter(record => record.profile?.discoverable).length,
         onlineUsers: 0, newUsersToday: records.filter(record => day(record.createdAt) === today).length, connections: 1, messages: 1,
@@ -381,9 +382,9 @@ await runBrowserSuite('admin', async ({ newContext, origin, check, artifactsDir,
     await page.setViewportSize({ width: 1440, height: 1000 });
 
     await check('整页刷新保持管理员会话，浏览器存储不保存密码或用户资料', async () => {
-      const before = (await context.cookies(origin + '/api/admin/session')).find(value => value.name === 'soul_admin').value;
+      const before = (await context.cookies(origin + '/api/admin/session')).find(value => value.name === 'tongzhi_admin').value;
       await page.reload(); filters = { ...defaults }; await active();
-      const after = (await context.cookies(origin + '/api/admin/session')).find(value => value.name === 'soul_admin').value;
+      const after = (await context.cookies(origin + '/api/admin/session')).find(value => value.name === 'tongzhi_admin').value;
       assert.equal(after, before); assert.equal((await api(context, 'GET', '/session')).authenticated, true);
       const storage = await page.evaluate(() => JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }));
       safeData(storage);
@@ -393,7 +394,7 @@ await runBrowserSuite('admin', async ({ newContext, origin, check, artifactsDir,
 
     await check('真实 UI 退出立即销毁旧会话，并清除两个标签页中的列表和画像详情', async () => {
       await details(privatePerson);
-      const oldCookie = (await context.cookies(origin + '/api/admin/session')).find(value => value.name === 'soul_admin');
+      const oldCookie = (await context.cookies(origin + '/api/admin/session')).find(value => value.name === 'tongzhi_admin');
       const replay = await newContext(); track(replay); await replay.addCookies([oldCookie]);
       const peer = await context.newPage(); peer.setDefaultTimeout(18000); pages.push(peer);
       await peer.goto(origin + '/admin'); await active(peer);
@@ -416,7 +417,7 @@ await runBrowserSuite('admin', async ({ newContext, origin, check, artifactsDir,
 
     await check('服务端八小时绝对过期后真实刷新与标签页恢复都要求重新登录', async () => {
       await login();
-      const oldCookie = (await context.cookies(origin + '/api/admin/session')).find(value => value.name === 'soul_admin');
+      const oldCookie = (await context.cookies(origin + '/api/admin/session')).find(value => value.name === 'tongzhi_admin');
       const replay = await newContext(); track(replay); await replay.addCookies([oldCookie]);
       const peer = await context.newPage(); peer.setDefaultTimeout(18000); pages.push(peer);
       await peer.goto(origin + '/admin'); await active(peer);

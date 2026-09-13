@@ -3,7 +3,7 @@ import { ArrowUpRight, Bookmark, Check, ChevronRight, Sparkles, X, LoaderCircle,
 import type { Dimension, Match } from './types';
 
 export function Logo({ small = false }: { small?: boolean }) {
-  return <div className={`brand ${small ? 'brand-small' : ''}`}><span className="brand-symbol"><svg viewBox="0 0 42 42" aria-hidden="true"><path d="M7 23c6-17 11-17 16-2s8 13 13-5M7 31c6-17 11-17 16-2s8 13 13-5"/><circle cx="33" cy="8" r="2.5"/></svg></span>{!small && <span className="brand-word">同频<span>知识让我们相遇</span></span>}</div>;
+  return <div className={`brand ${small ? 'brand-small' : ''}`}><span className="brand-symbol"><svg viewBox="0 0 42 42" aria-hidden="true"><path d="M7 23c6-17 11-17 16-2s8 13 13-5M7 31c6-17 11-17 16-2s8 13 13-5"/><circle cx="33" cy="8" r="2.5"/></svg></span>{!small && <span className="brand-word">同知<span>因问题相聚，以知识相识</span></span>}</div>;
 }
 
 const palettes = [
@@ -69,7 +69,7 @@ export function HeroArt() {
 }
 
 export function MatchCard({ match, onSelect, onSave, saving = false }: { match: Match; onSelect: () => void; onSave: () => void; saving?: boolean }) {
-  return <article className="match-card" data-testid="match-card"><div className="match-card-top"><Avatar name={match.name} seed={match.id} src={match.avatar}/><div className="match-person"><h3>{match.name}<span className="person-origin">{match.demo ? '体验人物' : match.provider === 'zhihu' ? '知乎已连接' : '访客'}</span></h3><p>{match.title}</p></div><div className="match-score"><strong>{match.score}<span>°</span></strong><span>{match.matchingMode === 'complement' ? '互补指数' : '同频指数'}</span></div></div>
+  return <article className="match-card" data-testid="match-card"><div className="match-card-top"><Avatar name={match.name} seed={match.id} src={match.avatar}/><div className="match-person"><h3>{match.name}<span className="person-origin">{match.demo ? '体验人物' : match.provider === 'zhihu' ? '知乎已连接' : match.provider === 'email' ? '邮箱账号' : '访客'}</span></h3><p>{match.title}</p></div><div className="match-score"><strong>{match.score}<span>°</span></strong><span>{match.matchingMode === 'complement' ? '互补指数' : '同频指数'}</span></div></div>
     <p className="person-about">{match.about}</p>
     <div className="tags">{match.interests.slice(0, 4).map(t => <span key={t.id} className={`tag ${match.shared.some(s => s.id === t.id) ? 'tag-purple' : ''}`}>{t.label}</span>)}</div>
     <div className="match-reason"><Sparkles size={14}/><p>{match.reasons[0]}</p></div>
