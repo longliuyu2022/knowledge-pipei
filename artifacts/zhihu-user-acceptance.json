@@ -1,0 +1,59 @@
+{
+  "kind": "tongpin-zhihu-oauth-user-acceptance",
+  "status": "passed",
+  "origin": "https://zhihupipei.aiimage.icu",
+  "checkedAt": "2026-09-13T05:52:22.869Z",
+  "checkedAtShanghai": "2026-09-13 13:52:22 Asia/Shanghai",
+  "recordedAt": "2026-09-13T05:55:13.213Z",
+  "userConfirmed": true,
+  "serverReportVerified": true,
+  "requestedLimitPerInterface": 1,
+  "items": [
+    {
+      "id": "contents",
+      "label": "我的创作",
+      "status": "success",
+      "count": 1,
+      "code": null,
+      "message": "可读取，已检查 1 条。"
+    },
+    {
+      "id": "followees",
+      "label": "我关注的人",
+      "status": "success",
+      "count": 1,
+      "code": null,
+      "message": "可读取，已检查 1 条。"
+    },
+    {
+      "id": "favlists",
+      "label": "我的收藏夹",
+      "status": "success",
+      "count": 1,
+      "code": null,
+      "message": "可读取，已检查 1 条。"
+    },
+    {
+      "id": "favlist_contents",
+      "label": "收藏夹中的内容",
+      "status": "empty",
+      "count": 0,
+      "code": null,
+      "message": "接口正常，当前范围没有公开数据。"
+    },
+    {
+      "id": "collections",
+      "label": "我的近期收藏",
+      "status": "empty",
+      "count": 0,
+      "code": null,
+      "message": "接口正常，当前范围没有公开数据。"
+    }
+  ],
+  "evidence": "用户本人提供的13:52逐项结果，与运行服务所用生产数据库中保存的检查报告一致。仅读取检查元数据进行核对。",
+  "notes": [
+    "本次五项均实际请求；收藏夹内容与近期收藏返回空列表，接口正常。",
+    "实际读取使用用户正常授权会话；本次核对未代替用户授权，也未重新调用知乎接口。",
+    "只保存状态、条数、受控说明与时间，不保存账号标识、原始内容、收藏夹标识、浏览器会话或凭证。"
+  ]
+}

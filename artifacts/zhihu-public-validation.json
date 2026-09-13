@@ -32,24 +32,40 @@
   },
   "oauthUserApiValidation": {
     "contents": {
-      "status": "pending",
-      "requestedItemCount": 0
+      "status": "success",
+      "requestedItemCount": 1,
+      "returnedItemCount": 1,
+      "checkedAt": "2026-09-13T05:52:22.869Z"
     },
     "followees": {
-      "status": "pending",
-      "requestedItemCount": 0
+      "status": "success",
+      "requestedItemCount": 1,
+      "returnedItemCount": 1,
+      "checkedAt": "2026-09-13T05:52:22.869Z"
     },
     "favlists": {
-      "status": "pending",
-      "requestedItemCount": 0
+      "status": "success",
+      "requestedItemCount": 1,
+      "returnedItemCount": 1,
+      "checkedAt": "2026-09-13T05:52:22.869Z"
     },
     "favlist_contents": {
-      "status": "pending",
-      "requestedItemCount": 0
+      "status": "empty",
+      "requestedItemCount": 1,
+      "returnedItemCount": 0,
+      "checkedAt": "2026-09-13T05:52:22.869Z"
     },
     "collections": {
-      "status": "pending",
-      "requestedItemCount": 0
+      "status": "empty",
+      "requestedItemCount": 1,
+      "returnedItemCount": 0,
+      "checkedAt": "2026-09-13T05:52:22.869Z"
     }
+  },
+  "oauthUserApiValidationEvidence": {
+    "status": "passed",
+    "source": "zhihu-user-acceptance.json",
+    "userConfirmed": true,
+    "serverReportVerified": true
   }
 }
