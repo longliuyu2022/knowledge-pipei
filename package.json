@@ -1,0 +1,35 @@
+{
+  "name": "zhihu-soulmatch",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "同频 · 知乎灵魂对对碰，让共同的好奇心成为相遇的起点",
+  "engines": { "node": ">=22.13.0" },
+  "scripts": {
+    "dev": "node server/dev.js",
+    "dev:web": "vite --host 127.0.0.1",
+    "dev:api": "node --watch server/index.js",
+    "build": "tsc --noEmit && vite build",
+    "start": "node server/index.js",
+    "test": "node --test tests/*.test.js",
+    "test:browser": "node scripts/browser-verify.mjs"
+  },
+  "dependencies": {
+    "d3-force": "^3.0.0",
+    "express": "^5.1.0",
+    "json-bigint": "^1.0.0",
+    "lucide-react": "^0.468.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "yaml": "^2.8.1"
+  },
+  "devDependencies": {
+    "@types/d3-force": "^3.0.10",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^4.4.1",
+    "playwright": "^1.55.0",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5"
+  }
+}

@@ -1,0 +1,90 @@
+{
+  "origin": "https://zhihupipei.aiimage.icu",
+  "status": "passed",
+  "startedAt": "2026-09-13T01:45:41.724Z",
+  "checks": [
+    {
+      "label": "公网 HTTPS 证书、HTTP 跳转与健康接口正常",
+      "status": "passed",
+      "elapsedMs": 600
+    },
+    {
+      "label": "会话 Cookie 启用 Secure、HttpOnly 和 SameSite=Lax",
+      "status": "passed",
+      "elapsedMs": 143
+    },
+    {
+      "label": "首页静态资源完整，体验伙伴明确标注并生成参赛封面",
+      "status": "passed",
+      "elapsedMs": 383
+    },
+    {
+      "label": "通过三步向导实际调用模型生成私有画像，原始依据可追溯",
+      "status": "passed",
+      "elapsedMs": 5453
+    },
+    {
+      "label": "从公网推荐打开详情，真实模型返回匹配解释",
+      "status": "passed",
+      "elapsedMs": 3825
+    },
+    {
+      "label": "真实模型生成三种破冰问题，没有伪造知乎来源",
+      "status": "passed",
+      "elapsedMs": 2743
+    },
+    {
+      "label": "浏览器脚本与资源无错误，生成 512px 作品图标",
+      "status": "passed",
+      "elapsedMs": 306
+    },
+    {
+      "label": "临时验收账号已删除，未加入真实匹配池",
+      "status": "passed",
+      "elapsedMs": 32
+    }
+  ],
+  "modelCalls": [
+    {
+      "kind": "profile",
+      "mode": "model",
+      "elapsedMs": 3645
+    },
+    {
+      "kind": "explanation",
+      "mode": "model",
+      "elapsedMs": 3348
+    },
+    {
+      "kind": "icebreakers",
+      "mode": "model",
+      "elapsedMs": 2704
+    }
+  ],
+  "pageErrors": [],
+  "assetErrors": [],
+  "cleanup": {
+    "accountCreated": true,
+    "accountDeleted": true,
+    "profileWasPrivate": true
+  },
+  "tls": {
+    "protocol": "TLS 1.3",
+    "issuer": "YE1",
+    "validUntil": "2026-12-12T00:35:49.000Z"
+  },
+  "capabilities": {
+    "ai": true,
+    "embedding": false,
+    "oauth": false,
+    "zhihuData": false,
+    "zhihuSearch": false
+  },
+  "cookie": {
+    "secure": true,
+    "httpOnly": true,
+    "sameSite": "Lax"
+  },
+  "finishedAt": "2026-09-13T01:45:56.220Z",
+  "modelRequestCount": 3
+}
