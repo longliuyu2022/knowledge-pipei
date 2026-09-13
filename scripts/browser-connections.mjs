@@ -24,12 +24,12 @@ async function within(promise, label, timeout = 18000) {
 }
 
 await runBrowserSuite('connections', async ({ newContext, origin, check, artifactsDir, report, service }) => {
-  const contexts = await Promise.all([newContext(), newContext()]);
-  const [contextA, contextB] = contexts;
-  const [pageA, pageB] = await Promise.all(contexts.map(context => context.newPage()));
-  for (const page of [pageA, pageB]) page.setDefaultTimeout(18000);
+  const contexts = await Promise.all([newContext(), newContext(), newContext()]);
+  const [contextA, contextB, contextC] = contexts;
+  const [pageA, pageB, pageC] = await Promise.all(contexts.map(context => context.newPage()));
+  for (const page of [pageA, pageB, pageC]) page.setDefaultTimeout(18000);
   await contextA.grantPermissions(['clipboard-read', 'clipboard-write'], { origin });
-  const externalRequests = [], iceRequests = [], messageRequests = [];
+  const externalRequests = [], iceRequests = [], messageRequests = [], conversationContextRequests = [];
   for (const context of contexts) {
     context.on('request', request => {
       const url = new URL(request.url());
@@ -37,8 +37,9 @@ await runBrowserSuite('connections', async ({ newContext, origin, check, artifac
     });
   }
   pageA.on('request', request => {
-    if (request.method() !== 'POST') return;
     const path = new URL(request.url()).pathname;
+    if (request.method() === 'GET' && /^\/api\/conversations\/[^/]+\/context$/.test(path)) conversationContextRequests.push(path);
+    if (request.method() !== 'POST') return;
     if (path.endsWith('/icebreakers')) iceRequests.push(path);
     if (/\/api\/conversations\/[^/]+\/messages$/.test(path)) messageRequests.push(request.postDataJSON());
   });
@@ -46,6 +47,7 @@ await runBrowserSuite('connections', async ({ newContext, origin, check, artifac
   async function request(actor, method, path, body, status = 200) {
     const response = await actor.context.request.fetch(origin + '/api' + path, {
       method,
+      maxRetries: method === 'GET' ? 1 : 0,
       headers: { Origin: origin, ...(actor.csrf ? { 'X-CSRF-Token': actor.csrf } : {}) },
       ...(body === undefined ? {} : { data: body }),
     });
@@ -56,12 +58,17 @@ await runBrowserSuite('connections', async ({ newContext, origin, check, artifac
 
   const actorA = { context: contextA, page: pageA, name: '林清和', csrf: '', id: '', profile: null };
   const actorB = { context: contextB, page: pageB, name: '许知遥', csrf: '', id: '', profile: null };
+  const actorC = { context: contextC, page: pageC, name: '程见山', csrf: '', id: '', profile: null };
   const connectionMessages = id => `/conversations/${encodeURIComponent(id)}`;
   const sendButton = page => page.locator('.conversation-composer').getByRole('button', { name: '发送', exact: true });
   const composer = page => page.locator('.conversation-composer textarea');
   const renderedMessages = page => page.locator('.conversation-message-content > p');
   const tabs = (page, label) => page.getByRole('tab', { name: new RegExp(label) });
   const messageWithText = (page, text) => renderedMessages(page).filter({ hasText: text });
+  const starter = page => page.getByTestId('conversation-starter');
+  const starterQuestions = page => page.getByTestId('conversation-starter-question');
+  const starterTexts = page => starterQuestions(page).locator('span:nth-child(2)').allTextContents();
+  const chatIceRequests = () => iceRequests.filter(path => path.startsWith('/api/conversations/'));
   let conversationId = '', declinedId = '';
 
   async function openPartner(actor, partner) {
@@ -88,9 +95,16 @@ await runBrowserSuite('connections', async ({ newContext, origin, check, artifac
     await eventually(async () => assert.equal(await composer(actor.page).inputValue(), ''));
   }
 
+  async function expandStarter(page) {
+    await starter(page).waitFor({ state: 'visible' });
+    const toggle = page.getByTestId('conversation-starter-toggle');
+    if (await toggle.getAttribute('aria-expanded') !== 'true') await toggle.click();
+    await starterQuestions(page).first().waitFor({ state: 'visible' });
+  }
+
   try {
-    await check('两个独立浏览器身份，隔离 SQLite 且模型与知乎外部能力关闭', async () => {
-      for (const actor of [actorA, actorB]) {
+    await check('三个独立浏览器身份，隔离 SQLite 且模型与知乎外部能力关闭', async () => {
+      for (const actor of [actorA, actorB, actorC]) {
         const bootstrap = await request(actor, 'GET', '/bootstrap');
         actor.csrf = bootstrap.csrf; actor.id = bootstrap.user.id;
         assert.equal(bootstrap.profile, null);
@@ -103,18 +117,23 @@ await runBrowserSuite('connections', async ({ newContext, origin, check, artifac
           about: '在技术与日常的交界处寻找好问题，想一起讨论有温度的产品。',
           question: 'AI 帮我们做选择时，怎样把最终决定留给人？',
           styleId: 'deep', goals: ['conversation', 'learning'],
-        } : {
+        } : actor === actorB ? {
           name: actor.name, topicIds: ['ai', 'product', 'reading', 'design', 'photography'],
           about: '喜欢研究人如何与技术相处，也在摄影和阅读中收集新的灵感。',
           question: '解释一个决定，应该帮助人理解，还是帮助人做出选择？',
           styleId: 'deep', goals: ['conversation', 'learning'],
+        } : {
+          name: actor.name, topicIds: ['nature', 'space', 'sports'],
+          about: '喜欢沿着山路看星星，记录每次徒步遇见的风景。',
+          question: '你最近在哪片山野看到了星空？',
+          styleId: 'hands-on', goals: ['building', 'learning'],
         };
         actor.profile = (await request(actor, 'POST', '/profile', { input, revision: 0, useAI: false })).profile;
         assert.equal(actor.profile.discoverable, false);
         assert.equal(actor.profile.analysis.mode, 'rules');
       }
-      assert.notEqual(actorA.id, actorB.id);
-      report.configuration = { identities: 2, database: 'temporary isolated SQLite', ai: false, embedding: false, zhihu: false };
+      assert.equal(new Set([actorA.id, actorB.id, actorC.id]).size, 3);
+      report.configuration = { identities: 3, database: 'temporary isolated SQLite', ai: false, embedding: false, zhihu: false };
     });
 
     await check('未公开画像互不可见；真实匹配页不混入体验人物', async () => {
@@ -172,6 +191,9 @@ await runBrowserSuite('connections', async ({ newContext, origin, check, artifac
       assert.equal(sent.length, 1); assert.equal(sent[0].message, invitationText); assert.equal(sent[0].status, 'pending');
       declinedId = sent[0].id;
       await request(actorA, 'GET', connectionMessages(declinedId), undefined, 404);
+      await request(actorA, 'GET', `${connectionMessages(declinedId)}/context`, undefined, 404);
+      await request(actorA, 'POST', `${connectionMessages(declinedId)}/icebreakers`, {}, 404);
+      assert.equal(await starter(pageA).count(), 0); assert.equal(await starter(pageB).count(), 0);
       await pageB.locator('.connection-invitation-card').filter({ hasText: invitationText }).waitFor({ state: 'visible' });
       assert.equal(await pageB.locator('.connection-invitation-card').count(), 1);
       await dialog.getByRole('button', { name: '查看我的连接', exact: true }).click();
@@ -214,6 +236,139 @@ await runBrowserSuite('connections', async ({ newContext, origin, check, artifac
         assert.equal((await request(actor, 'GET', connectionMessages(conversationId))).items.length, 0);
         assert.match(await actor.page.locator('.conversation-origin').innerText(), /这次想从一个具体例子出发/);
       }
+    });
+
+    await check('已建立聊天自动展示真实共同兴趣和三条本地话题，无关身份不可读取且不自动请求 AI', async () => {
+      for (const [actor, partner] of [[actorA, actorB], [actorB, actorA]]) {
+        await expandStarter(actor.page);
+        const data = await request(actor, 'GET', `${connectionMessages(conversationId)}/context`);
+        const expected = actor.profile.interests.filter(topic => partner.profile.interests.some(value => value.id === topic.id)).map(topic => topic.id).sort();
+        assert.equal(data.mode, 'rules'); assert.equal(data.questions.length, 3); assert.equal(data.reasons.length, 3);
+        assert.deepEqual(data.shared.map(topic => topic.id).sort(), expected);
+        assert.equal(await starterQuestions(actor.page).count(), 3);
+        assert.deepEqual(await starterTexts(actor.page), data.questions);
+        const displayed = await actor.page.getByTestId('conversation-starter-shared').locator('[data-topic-id]').evaluateAll(items => items.map(item => item.getAttribute('data-topic-id')));
+        assert.deepEqual(displayed.sort(), expected);
+        assert.equal(await starter(actor.page).getAttribute('data-conversation-id'), conversationId);
+      }
+      assert.ok(conversationContextRequests.length >= 1); assert.equal(chatIceRequests().length, 0);
+      await request(actorC, 'GET', `${connectionMessages(conversationId)}/context`, undefined, 404);
+      await request(actorC, 'POST', `${connectionMessages(conversationId)}/icebreakers`, {}, 404);
+      await pageC.goto(origin + '/#connections'); await tabs(pageC, '我的对话').click();
+      assert.equal(await starter(pageC).count(), 0);
+      assert.equal((await request(actorA, 'GET', connectionMessages(conversationId))).items.length, 0);
+      await pageA.screenshot({ path: resolve(artifactsDir, 'conversation-starter-desktop.png'), fullPage: true });
+    });
+
+    await check('点击话题只追加草稿并聚焦，保留原文；达到 2000 字时整条拒绝且不自动发消息', async () => {
+      const questions = await starterTexts(pageA);
+      await composer(pageA).fill('我原本想先分享一个观察。');
+      await starterQuestions(pageA).first().click();
+      const appended = '我原本想先分享一个观察。\n\n' + questions[0];
+      await eventually(async () => assert.equal(await composer(pageA).inputValue(), appended));
+      await eventually(async () => assert.equal(await composer(pageA).evaluate(element => element === document.activeElement), true));
+      assert.equal(await pageA.getByTestId('conversation-starter-toggle').getAttribute('aria-expanded'), 'false');
+      assert.match(await pageA.getByTestId('conversation-starter-notice').innerText(), /已加入草稿/);
+      await expandStarter(pageA); await starterQuestions(pageA).nth(1).click();
+      assert.equal(await composer(pageA).inputValue(), appended + '\n\n' + questions[1]);
+      const fullDraft = '稿'.repeat(1999);
+      await composer(pageA).fill(fullDraft); await expandStarter(pageA); await starterQuestions(pageA).first().click();
+      assert.equal(await composer(pageA).inputValue(), fullDraft);
+      assert.match(await pageA.getByTestId('conversation-starter-notice').innerText(), /2000/);
+      assert.equal(messageRequests.length, 0); assert.equal(chatIceRequests().length, 0);
+      assert.equal((await request(actorA, 'GET', connectionMessages(conversationId))).items.length, 0);
+      await composer(pageA).fill('');
+    });
+
+    await check('话题读取与生成失败不阻塞输入，手动重试才请求更多灵感并保留草稿', async () => {
+      const contextPattern = `**/api/conversations/${conversationId}/context`;
+      let failContext = true;
+      const contextHandler = async route => {
+        if (failContext) { failContext = false; await route.abort('failed'); }
+        else await route.continue();
+      };
+      await pageA.route(contextPattern, contextHandler);
+      try {
+        await tabs(pageA, '收藏的伙伴').click(); await tabs(pageA, '我的对话').click();
+        await pageA.getByTestId('conversation-starter-error').waitFor({ state: 'visible' });
+        assert.equal(await composer(pageA).isEnabled(), true);
+        await composer(pageA).fill('这段草稿要在话题重试后继续保留。');
+        await pageA.getByTestId('conversation-starter-retry').click(); await expandStarter(pageA);
+        assert.equal(await composer(pageA).inputValue(), '这段草稿要在话题重试后继续保留。');
+      } finally { await pageA.unroute(contextPattern, contextHandler); }
+      const originalQuestions = await starterTexts(pageA);
+      const icePattern = `**/api/conversations/${conversationId}/icebreakers`;
+      const failGeneration = route => route.abort('failed');
+      await pageA.route(icePattern, failGeneration);
+      try {
+        await pageA.getByTestId('conversation-starter-generate').click();
+        await pageA.getByTestId('conversation-starter-generation-error').waitFor({ state: 'visible' });
+        assert.deepEqual(await starterTexts(pageA), originalQuestions);
+        assert.equal(await composer(pageA).isEnabled(), true);
+        assert.equal(await composer(pageA).inputValue(), '这段草稿要在话题重试后继续保留。');
+      } finally { await pageA.unroute(icePattern, failGeneration); }
+      const response = pageA.waitForResponse(value => new URL(value.url()).pathname === `/api/conversations/${conversationId}/icebreakers`);
+      await pageA.getByTestId('conversation-starter-generate').click();
+      const result = await response; assert.equal(result.status(), 200);
+      const generated = await result.json(); assert.equal(generated.mode, 'rules'); assert.equal(generated.questions.length, 3);
+      await eventually(async () => assert.deepEqual(await starterTexts(pageA), generated.questions));
+      assert.equal(await starter(pageA).getAttribute('data-mode'), 'rules');
+      assert.equal(await composer(pageA).inputValue(), '这段草稿要在话题重试后继续保留。');
+      assert.equal(chatIceRequests().length, 2); assert.equal(messageRequests.length, 0);
+      assert.equal((await request(actorA, 'GET', connectionMessages(conversationId))).items.length, 0);
+    });
+
+    await check('切换真实会话取消旧灵感请求，空共同兴趣不冒充重合，两段草稿与上下文保持独立', async () => {
+      const secondId = service.store.connectPairing(randomUUID(), actorA.id, actorC.id, actorA.profile.revision, actorC.profile.revision);
+      await pageA.getByRole('button', { name: '刷新我的连接', exact: true }).click();
+      await pageA.locator('.conversation-list-item').filter({ hasText: actorC.name }).waitFor({ state: 'visible' });
+      await expandStarter(pageA);
+      const draftAB = '留给许知遥的草稿。', draftAC = '留给程见山的草稿。';
+      await composer(pageA).fill(draftAB);
+      const pattern = `**/api/conversations/${conversationId}/icebreakers`;
+      let releaseResponse, markLanded, markReleased;
+      const release = new Promise(done => { releaseResponse = done; });
+      const landed = new Promise(done => { markLanded = done; });
+      const released = new Promise(done => { markReleased = done; });
+      const handler = async route => {
+        const response = await route.fetch(); assert.equal(response.status(), 200); markLanded();
+        await release;
+        try { await route.fulfill({ response }); } catch { /* The old conversation intentionally aborts this browser request. */ }
+        finally { markReleased(); }
+      };
+      await pageA.route(pattern, handler);
+      try {
+        const before = chatIceRequests().length;
+        await pageA.getByTestId('conversation-starter-generate').evaluate(button => { button.click(); button.click(); });
+        await within(landed, 'Delayed conversation inspiration');
+        assert.equal(chatIceRequests().length, before + 1);
+        await pageA.locator('.conversation-list-item').filter({ hasText: actorC.name }).click();
+        await expandStarter(pageA);
+        const otherContext = await request(actorA, 'GET', `${connectionMessages(secondId)}/context`);
+        assert.deepEqual(otherContext.shared, []); assert.equal(otherContext.questions.length, 3);
+        assert.equal(await starter(pageA).getAttribute('data-conversation-id'), secondId);
+        assert.deepEqual(await starterTexts(pageA), otherContext.questions);
+        assert.match(await pageA.getByTestId('conversation-starter-shared').innerText(), /暂未重合/);
+        assert.equal(await composer(pageA).inputValue(), ''); await composer(pageA).fill(draftAC);
+        releaseResponse(); await within(released, 'Cancelled conversation inspiration cleanup');
+        assert.equal(await starter(pageA).getAttribute('data-conversation-id'), secondId);
+        assert.deepEqual(await starterTexts(pageA), otherContext.questions);
+        assert.equal(await composer(pageA).inputValue(), draftAC);
+        await openConversation(actorA, actorB); await expandStarter(pageA);
+        assert.equal(await composer(pageA).inputValue(), draftAB);
+        assert.equal(await starter(pageA).getAttribute('data-conversation-id'), conversationId);
+        const originalContext = await request(actorA, 'GET', `${connectionMessages(conversationId)}/context`);
+        assert.deepEqual(await starterTexts(pageA), originalContext.questions);
+      } finally { releaseResponse(); await pageA.unroute(pattern, handler); }
+      await pageC.reload(); await openConversation(actorC, actorA); await expandStarter(pageC);
+      assert.equal((await request(actorC, 'GET', '/bootstrap')).profile.discoverable, false);
+      assert.equal(await starter(pageC).getAttribute('data-conversation-id'), secondId);
+      await request(actorA, 'POST', `/blocked/${actorC.id}`, {});
+      await eventually(async () => assert.equal(await starter(pageC).count(), 0));
+      await eventually(async () => assert.equal((await request(actorA, 'GET', '/connections')).invitations.length, 1));
+      assert.equal(await starter(pageA).getAttribute('data-conversation-id'), conversationId);
+      assert.equal((await request(actorA, 'GET', connectionMessages(conversationId))).items.length, 0);
+      await composer(pageA).fill('');
     });
 
     await check('空白消息禁发；双方真实发送与 SSE 同步，Enter 发送及 Shift+Enter 换行', async () => {
@@ -312,33 +467,44 @@ await runBrowserSuite('connections', async ({ newContext, origin, check, artifac
       } finally { releaseResponse(); await pageA.unroute(pattern, handler); }
     });
 
-    await check('桌面聊天截图，390px 手机无横向溢出且往返对话列表保留草稿', async () => {
+    await check('桌面和 390/320px 聊天话题可折叠，输入框完整可见且往返列表保留草稿', async () => {
       assert.equal(await pageA.locator('.conversation-mobile-back').isVisible(), false);
       await pageA.screenshot({ path: resolve(artifactsDir, 'connections-desktop.png'), fullPage: true });
-      await pageA.setViewportSize({ width: 390, height: 844 });
-      await pageA.locator('.conversation-mobile-back').waitFor({ state: 'visible' });
-      await pageA.locator('.conversation-mobile-back').click();
-      const listItem = pageA.locator('.conversation-list-item').filter({ hasText: actorB.name });
-      await listItem.waitFor({ state: 'visible' });
-      assert.match(await listItem.innerText(), /草稿/);
-      await listItem.click();
-      await pageA.locator('.conversation-origin').waitFor({ state: 'visible' });
-      assert.equal(await composer(pageA).inputValue(), nextDraft);
-      const sizes = await pageA.evaluate(() => {
-        const rect = document.querySelector('.conversation-composer').getBoundingClientRect();
-        return {
-          viewport: innerWidth, page: document.documentElement.scrollWidth,
-          panel: document.querySelector('.conversation-panel').getBoundingClientRect().width,
-          panelScroll: document.querySelector('.conversation-panel').scrollWidth,
-          composer: { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom },
-          navigationTop: document.querySelector('.mobile-bottom-nav').getBoundingClientRect().top,
-        };
-      });
-      assert.ok(sizes.page <= sizes.viewport + 1, `Mobile page overflow: ${sizes.page} > ${sizes.viewport}`);
-      assert.ok(sizes.panelScroll <= sizes.panel + 1, `Mobile chat overflow: ${sizes.panelScroll} > ${sizes.panel}`);
-      assert.ok(sizes.composer.right <= sizes.viewport + 1 && sizes.composer.left >= 0);
-      assert.ok(sizes.composer.top >= 0 && sizes.composer.bottom <= sizes.navigationTop + 1, 'Mobile composer must fit above the fixed bottom navigation.');
-      await pageA.screenshot({ path: resolve(artifactsDir, 'connections-mobile.png'), fullPage: true });
+      for (const width of [390, 320]) {
+        await pageA.setViewportSize({ width, height: 844 });
+        await pageA.locator('.conversation-mobile-back').waitFor({ state: 'visible' });
+        await pageA.locator('.conversation-mobile-back').click();
+        const listItem = pageA.locator('.conversation-list-item').filter({ hasText: actorB.name });
+        await listItem.waitFor({ state: 'visible' }); assert.match(await listItem.innerText(), /草稿/);
+        await listItem.click(); await pageA.locator('.conversation-origin').waitFor({ state: 'visible' });
+        await expandStarter(pageA);
+        assert.equal(await composer(pageA).inputValue(), nextDraft); assert.equal(await starterQuestions(pageA).count(), 3);
+        const sizes = await pageA.evaluate(() => {
+          const rect = document.querySelector('.conversation-composer').getBoundingClientRect();
+          const body = document.querySelector('.conversation-starter-body');
+          return {
+            viewport: innerWidth, page: document.documentElement.scrollWidth,
+            panel: document.querySelector('.conversation-panel').getBoundingClientRect().width,
+            panelScroll: document.querySelector('.conversation-panel').scrollWidth,
+            starter: { width: body.clientWidth, scroll: body.scrollWidth, height: body.getBoundingClientRect().height },
+            questions: [...document.querySelectorAll('[data-testid="conversation-starter-question"]')].map(element => ({ left: element.getBoundingClientRect().left, right: element.getBoundingClientRect().right })),
+            composer: { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom },
+            messagesHeight: document.querySelector('.conversation-messages').clientHeight,
+            navigationTop: document.querySelector('.mobile-bottom-nav').getBoundingClientRect().top,
+          };
+        });
+        assert.ok(sizes.page <= sizes.viewport + 1, `Mobile page overflow: ${sizes.page} > ${sizes.viewport}`);
+        assert.ok(sizes.panelScroll <= sizes.panel + 1, `Mobile chat overflow: ${sizes.panelScroll} > ${sizes.panel}`);
+        assert.ok(sizes.starter.scroll <= sizes.starter.width + 1 && sizes.starter.height <= 191);
+        for (const question of sizes.questions) assert.ok(question.left >= 0 && question.right <= width + 1);
+        assert.ok(sizes.messagesHeight > 80, 'Expanded topics must leave room to read the conversation.');
+        assert.ok(sizes.composer.right <= sizes.viewport + 1 && sizes.composer.left >= 0);
+        assert.ok(sizes.composer.top >= 0 && sizes.composer.bottom <= sizes.navigationTop + 1, 'Mobile composer must fit above the fixed bottom navigation.');
+        await pageA.screenshot({ path: resolve(artifactsDir, width === 390 ? 'connections-mobile.png' : 'connections-mobile-320.png'), fullPage: true });
+        await pageA.getByTestId('conversation-starter-toggle').click();
+        assert.equal(await pageA.locator('.conversation-starter-body').isVisible(), false);
+        assert.equal(await composer(pageA).inputValue(), nextDraft);
+      }
     });
 
     await check('浏览器整页刷新后已发送消息仍持久化，两方读取相同消息历史', async () => {
@@ -383,8 +549,11 @@ await runBrowserSuite('connections', async ({ newContext, origin, check, artifac
       await dialog.getByRole('button', { name: '确认屏蔽', exact: true }).click();
       await eventually(async () => assert.equal(await pageA.locator('.conversation-panel').count(), 0));
       await eventually(async () => assert.equal(await pageB.locator('.conversation-panel').count(), 0));
+      assert.equal(await starter(pageA).count(), 0); assert.equal(await starter(pageB).count(), 0);
       for (const [actor, partner] of [[actorA, actorB], [actorB, actorA]]) {
         await request(actor, 'GET', connectionMessages(conversationId), undefined, 404);
+        await request(actor, 'GET', `${connectionMessages(conversationId)}/context`, undefined, 404);
+        await request(actor, 'POST', `${connectionMessages(conversationId)}/icebreakers`, {}, 404);
         await request(actor, 'GET', `/people/${partner.id}`, undefined, 404);
         await request(actor, 'POST', `${connectionMessages(conversationId)}/messages`, { text: '屏蔽后不应送达的消息', clientMessageId: randomUUID() }, 404);
         assert.equal((await request(actor, 'GET', '/connections')).invitations.length, 0);
@@ -395,8 +564,10 @@ await runBrowserSuite('connections', async ({ newContext, origin, check, artifac
 
     await check('全流程没有浏览器外部网络请求或虚构消息', async () => {
       assert.deepEqual(externalRequests, []);
-      assert.equal(iceRequests.length, 1);
-      report.screenshots = ['connections-desktop.png', 'connections-mobile.png'];
+      assert.equal(iceRequests.filter(path => path.startsWith('/api/people/')).length, 1);
+      assert.equal(chatIceRequests().length, 3);
+      report.screenshots = ['conversation-starter-desktop.png', 'connections-desktop.png', 'connections-mobile.png', 'connections-mobile-320.png'];
+      report.conversationStarters = { automaticMode: 'rules', automaticQuestions: 3, manualRequests: chatIceRequests().length, draftLimit: 2000, crossConversationCancellation: true };
     });
   } catch (error) {
     await Promise.allSettled([

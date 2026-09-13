@@ -165,11 +165,121 @@ await runBrowserSuite('pairing', async ({ newContext, origin, check, artifactsDi
       report.configuration = { identities: 3, database: 'temporary isolated SQLite', ai: false, zhihu: false, expiryClock: 'injected into this isolated pairing service only' };
     });
 
+    await check('只浏览配对页的人不计入队列，真实零人数与包含自己的统计口径清晰可见', async () => {
+      for (const actor of actors) {
+        const state = await snapshot(actor);
+        assert.equal(state.queue.waiting, 0); assert.equal(state.queue.confirming, 0);
+        assert.deepEqual(Object.keys(state.queue).sort(), ['confirming', 'updatedAt', 'waiting']);
+        assert.equal(new Date(state.queue.updatedAt).toISOString(), state.queue.updatedAt);
+        await eventually(async () => assert.equal(await actor.page.getByTestId('pairing-queue-count').innerText(), '0 人正在排队'));
+        assert.match(await actor.page.getByTestId('pairing-queue').innerText(), /包含正在等待的自己/);
+        assert.match(await actor.page.getByTestId('pairing-queue').innerText(), /此刻还没有人等待/);
+      }
+      assert.equal(service.pairing.states.size, 0);
+    });
+
+    await check('邀请仅复制当前网站的公开配对入口，去掉 query 与个人标识，打开弹窗不会自动分享或入队', async () => {
+      await alice.context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin });
+      await alice.page.goto(origin + '/?invite_ref=private-browser-fixture#pairing');
+      await waitStatus(alice, 'idle');
+      await alice.page.evaluate(async () => {
+        window.__inviteShares = [];
+        Object.defineProperty(navigator, 'share', { configurable: true, value: async payload => { window.__inviteShares.push(payload); } });
+        await navigator.clipboard.writeText('邀请测试之前的剪贴板');
+      });
+      await alice.page.getByTestId('pairing-invite').click();
+      const modal = alice.page.getByRole('dialog', { name: '邀请朋友一起配对', exact: true });
+      await modal.waitFor({ state: 'visible' });
+      const link = await alice.page.getByTestId('invite-link').inputValue();
+      assert.equal(link, origin + '/#pairing');
+      assert.equal(new URL(link).search, ''); assert.equal(new URL(link).pathname, '/');
+      for (const value of [alice.id, alice.csrf, 'private-browser-fixture']) assert.equal(link.includes(value), false);
+      assert.match(await modal.innerText(), /各自完成知识画像/);
+      assert.match(await modal.innerText(), /都点击「开始配对」/);
+      assert.match(await modal.innerText(), /并不保证你们会配到彼此/);
+      assert.equal(await alice.page.evaluate(() => window.__inviteShares.length), 0);
+      assert.equal(await alice.page.evaluate(() => navigator.clipboard.readText()), '邀请测试之前的剪贴板');
+      await alice.page.getByTestId('invite-copy').click();
+      await eventually(async () => assert.match(await alice.page.getByTestId('invite-feedback').innerText(), /链接已复制/));
+      assert.equal(await alice.page.evaluate(() => navigator.clipboard.readText()), link);
+      assert.equal((await snapshot(alice)).status, 'idle'); assert.equal(service.pairing.states.size, 0);
+      for (let i = 0; i < 5; i++) {
+        await alice.page.keyboard.press('Tab');
+        const focus = await modal.evaluate(element => ({
+          inside: element.contains(document.activeElement),
+          browserChrome: document.activeElement === document.body && !document.hasFocus(),
+        }));
+        // Native dialogs may include the browser toolbar in their Tab cycle;
+        // that boundary leaves BODY active while the document itself loses focus.
+        assert.ok(focus.inside || focus.browserChrome, 'Keyboard focus must remain in the modal or browser chrome.');
+      }
+      assert.equal(await startButton(alice).evaluate(button => { button.focus(); return button === document.activeElement; }), false, 'The modal must keep the background inert.');
+      await alice.page.keyboard.press('Escape');
+      await modal.waitFor({ state: 'hidden' });
+      await eventually(async () => assert.equal(await alice.page.evaluate(() => document.activeElement?.getAttribute('data-testid')), 'pairing-invite'));
+    });
+
+    await check('剪贴板拒绝与系统分享取消都保留可手动复制的选中链接，只有点击分享才调用系统', async () => {
+      await alice.page.evaluate(() => {
+        Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async () => { throw new DOMException('Clipboard denied', 'NotAllowedError'); } } });
+        Object.defineProperty(navigator, 'share', { configurable: true, value: async payload => { window.__inviteShares.push(payload); throw new DOMException('Share canceled', 'AbortError'); } });
+      });
+      await alice.page.getByTestId('pairing-invite').click();
+      const linkInput = alice.page.getByTestId('invite-link');
+      assert.equal(await alice.page.evaluate(() => window.__inviteShares.length), 0);
+      await alice.page.getByTestId('invite-copy').click();
+      await eventually(async () => assert.match(await alice.page.getByTestId('invite-feedback').innerText(), /未能自动复制.*链接已选中/));
+      const selected = () => linkInput.evaluate(input => ({ focused: input === document.activeElement, value: input.value, selected: input.value.slice(input.selectionStart, input.selectionEnd) }));
+      assert.deepEqual(await selected(), { focused: true, value: origin + '/#pairing', selected: origin + '/#pairing' });
+      await alice.page.getByTestId('invite-share').click();
+      await eventually(async () => assert.match(await alice.page.getByTestId('invite-feedback').innerText(), /已取消分享.*链接已选中/));
+      assert.deepEqual(await selected(), { focused: true, value: origin + '/#pairing', selected: origin + '/#pairing' });
+      const shared = await alice.page.evaluate(() => window.__inviteShares);
+      assert.equal(shared.length, 1); assert.equal(shared[0].url, origin + '/#pairing');
+      assert.deepEqual(Object.keys(shared[0]).sort(), ['text', 'title', 'url']);
+      for (const value of [alice.id, alice.csrf, 'private-browser-fixture']) assert.equal(JSON.stringify(shared[0]).includes(value), false);
+      await alice.page.evaluate(() => {
+        Object.defineProperty(navigator, 'share', { configurable: true, value: async () => { throw new DOMException('Sharing denied', 'NotAllowedError'); } });
+      });
+      await alice.page.getByTestId('invite-share').click();
+      await eventually(async () => assert.match(await alice.page.getByTestId('invite-feedback').innerText(), /暂时无法打开分享.*链接已选中/));
+      assert.deepEqual(await selected(), { focused: true, value: origin + '/#pairing', selected: origin + '/#pairing' });
+      assert.equal((await snapshot(alice)).status, 'idle');
+      await alice.page.keyboard.press('Escape');
+      await alice.page.getByTestId('invite-dialog').waitFor({ state: 'hidden' });
+      await alice.page.evaluate(() => { delete navigator.clipboard; });
+    });
+
+    for (const width of [390, 320]) {
+      await check(`${width}px 邀请弹窗、可选择链接与操作按钮无横向溢出，关闭后焦点回到入口`, async () => {
+        await alice.page.setViewportSize({ width, height: 844 });
+        await alice.page.getByTestId('pairing-invite').click();
+        const modal = alice.page.getByRole('dialog', { name: '邀请朋友一起配对', exact: true });
+        const sizes = await modal.evaluate(element => ({
+          viewport: innerWidth, page: document.documentElement.scrollWidth,
+          dialog: element.getBoundingClientRect().toJSON(),
+          controls: [...element.querySelectorAll('input, button')].map(control => control.getBoundingClientRect().toJSON()),
+        }));
+        assert.ok(sizes.page <= sizes.viewport + 1);
+        assert.ok(sizes.dialog.left >= -1 && sizes.dialog.right <= sizes.viewport + 1);
+        for (const control of sizes.controls) assert.ok(control.width > 0 && control.left >= -1 && control.right <= sizes.viewport + 1);
+        await alice.page.screenshot({ path: resolve(artifactsDir, `invite-mobile-${width}.png`), fullPage: true });
+        await modal.getByRole('button', { name: '关闭弹窗', exact: true }).click();
+        await modal.waitFor({ state: 'hidden' });
+        await eventually(async () => assert.equal(await alice.page.evaluate(() => document.activeElement?.getAttribute('data-testid')), 'pairing-invite'));
+      });
+    }
+    await alice.page.setViewportSize({ width: 1440, height: 1000 });
+    await alice.page.goto(origin + '/#pairing');
+    await waitStatus(alice, 'idle');
+
     let firstAttempt;
     await check('没有其他人开始时真实等待，不用 demo 补位；点击开始不公开画像', async () => {
       const state = await start(alice); firstAttempt = state.attemptId;
       assert.equal(state.status, 'searching'); assert.equal(state.pair, null); assert.equal(state.conversationId, null);
+      assert.equal(state.queue.waiting, 1); assert.equal(state.queue.confirming, 0);
       await waitStatus(alice, 'searching');
+      await eventually(async () => assert.equal(await alice.page.getByTestId('pairing-queue-count').innerText(), '1 人正在排队'));
       assert.equal(await candidate(alice).count(), 0);
       assert.equal((await snapshot(bob)).status, 'idle'); assert.equal((await snapshot(carol)).status, 'idle');
       for (const actor of actors) assert.equal((await api(actor, 'GET', '/bootstrap')).profile.discoverable, false);
@@ -186,6 +296,7 @@ await runBrowserSuite('pairing', async ({ newContext, origin, check, artifactsDi
       assert.equal(late.status, 'searching'); assert.equal(late.attemptId, restarted.attemptId);
       const repeated = await api(alice, 'POST', '/pairing/start', { revision: alice.profile.revision, mode: 'resonance', topic: null });
       assert.equal(repeated.attemptId, restarted.attemptId); assert.equal(repeated.status, 'searching');
+      assert.equal(repeated.queue.waiting, 1); assert.equal(repeated.queue.confirming, 0);
       await waitStatus(alice, 'searching');
     });
 
@@ -193,6 +304,9 @@ await runBrowserSuite('pairing', async ({ newContext, origin, check, artifactsDi
     await check('第二个真实在线用户开始后双方通过 SSE 收到同一候选，私密画像只供当次双方查看', async () => {
       await start(bob);
       const [one, two] = await getProposed(alice, bob); proposedPairId = one.pair.id;
+      assert.equal(one.queue.waiting, 0); assert.equal(one.queue.confirming, 2);
+      assert.equal(two.queue.waiting, 0); assert.equal(two.queue.confirming, 2);
+      await eventually(async () => assert.equal(await alice.page.getByTestId('pairing-queue-confirming').innerText(), '2 人确认中'));
       assert.equal(one.pair.acceptedByMe, false); assert.equal(two.pair.acceptedByMe, false);
       assert.equal(one.pair.acceptedByOther, false); assert.equal(two.pair.acceptedByOther, false);
       await api(alice, 'GET', `/people/${bob.id}`, undefined, 404);
@@ -205,6 +319,7 @@ await runBrowserSuite('pairing', async ({ newContext, origin, check, artifactsDi
       await start(carol); await waitStatus(carol, 'searching');
       const outsider = await snapshot(carol);
       assert.equal(outsider.status, 'searching'); assert.equal(outsider.pair, null); assert.equal(outsider.conversationId, null);
+      assert.equal(outsider.queue.waiting, 1); assert.equal(outsider.queue.confirming, 2);
       for (const value of [alice.id, bob.id, alice.name, bob.name, proposedPairId]) assert.equal(JSON.stringify(outsider).includes(value), false);
       const denied = await api(carol, 'POST', '/pairing/respond', { pairId: proposedPairId, decision: 'accept' }, [403, 404, 409]);
       assert.ok(denied.error);
@@ -260,6 +375,8 @@ await runBrowserSuite('pairing', async ({ newContext, origin, check, artifactsDi
       await bob.page.getByTestId('pairing-accept').click();
       await Promise.all([waitStatus(alice, 'connected'), waitStatus(bob, 'connected')]);
       const [one, two] = await Promise.all([snapshot(alice), snapshot(bob)]);
+      assert.equal(one.queue.waiting, 1); assert.equal(one.queue.confirming, 0);
+      assert.equal(two.queue.waiting, 1); assert.equal(two.queue.confirming, 0);
       conversationId = one.conversationId;
       assert.ok(conversationId); assert.equal(conversationId, two.conversationId);
       for (const actor of [alice, bob]) {
@@ -301,6 +418,8 @@ await runBrowserSuite('pairing', async ({ newContext, origin, check, artifactsDi
       await waitStatus(carol, 'idle');
       const expired = await snapshot(carol);
       assert.equal(expired.status, 'idle'); assert.equal(expired.pair, null); assert.equal(expired.reason, 'queue_expired');
+      assert.equal(expired.queue.waiting, 0); assert.equal(expired.queue.confirming, 0);
+      await eventually(async () => assert.equal(await carol.page.getByTestId('pairing-queue-count').innerText(), '0 人正在排队'));
       assert.equal(await startButton(carol).isEnabled(), true);
     });
 
@@ -351,6 +470,7 @@ await runBrowserSuite('pairing', async ({ newContext, origin, check, artifactsDi
       await waitStatus(carol, 'searching');
       const [gone, remaining] = await Promise.all([snapshot(bob), snapshot(carol)]);
       assert.equal(gone.status, 'idle'); assert.equal(remaining.status, 'searching');
+      assert.equal(remaining.queue.waiting, 1); assert.equal(remaining.queue.confirming, 0);
       assert.equal(remaining.pair, null); assert.equal(gone.reason, 'offline'); assert.equal(remaining.reason, 'peer_left');
       await staleConfirmation(bob, offline.pair.id);
       await showPairing(bob); await waitStatus(bob, 'idle');
@@ -384,7 +504,7 @@ await runBrowserSuite('pairing', async ({ newContext, origin, check, artifactsDi
       assert.deepEqual(externalRequests, []);
       assert.equal((await api(alice, 'GET', `/conversations/${conversationId}`)).items.length, 2);
       assert.equal((await api(bob, 'GET', `/conversations/${conversationId}`)).items.length, 2);
-      report.screenshots = ['pairing-desktop.png', 'pairing-mobile-390.png', 'pairing-mobile-320.png'];
+      report.screenshots = ['pairing-desktop.png', 'pairing-mobile-390.png', 'pairing-mobile-320.png', 'invite-mobile-390.png', 'invite-mobile-320.png'];
       report.expiration = { offlineMs: 45000, queueMs: 180000, proposalMs: 60000, clock: 'advanced only in the isolated in-memory pairing manager' };
     });
   } catch (error) {

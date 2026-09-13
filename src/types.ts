@@ -29,6 +29,7 @@ export interface Match extends Person {
   matchingMode: Mode; algorithm: 'topics' | 'embedding'; saved: boolean;
 }
 export interface PairingState {
+  queue: { waiting: number; confirming: number; updatedAt: string };
   status: 'idle' | 'searching' | 'proposed' | 'connected';
   attemptId: string | null;
   mode: Mode;
@@ -44,12 +45,19 @@ export interface Bootstrap {
   user: { id: string; name: string; provider: string; avatar: string };
   csrf: string; profile: Profile | null; sampleProfile: Profile;
   capabilities: { ai: boolean; embedding: boolean; oauth: boolean; zhihuData: boolean; zhihuSearch: boolean };
-  zhihuConnected: boolean; imports: { count: number; fetchedAt: string | null };
+  zhihuConnected: boolean; imports: { count: number; fetchedAt: string | null; checkedAt?: string | null };
   savedIds: string[]; incomingCount: number;
 }
 export interface Explanation { mode: AnalysisMode; reasons: string[]; bridge: string; notice?: string }
 export interface Source { id: string; title: string; summary: string; author: string; url: string; scope: string }
 export interface Icebreakers { mode: AnalysisMode; questions: string[]; sourceIds: string[]; sources: Source[]; notice?: string; sourceNotice?: string }
+export interface ConversationContext { shared: { id: string; label: string }[]; reasons: string[]; questions: string[]; mode: 'rules' }
+export interface ZhihuValidationReport {
+  checkedAt: string;
+  status: 'passed' | 'partial' | 'failed';
+  items: { id: string; label: string; status: 'success' | 'empty' | 'error' | 'skipped'; count: number | null; code: string | null; message: string }[];
+}
+export interface ZhihuValidationState { report: ZhihuValidationReport | null; connected: boolean; retryAt: string | null }
 export interface Invitation {
   id: string; direction: 'incoming' | 'outgoing'; status: 'pending' | 'accepted';
   message: string; createdAt: string; person: Person;

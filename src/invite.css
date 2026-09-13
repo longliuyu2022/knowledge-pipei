@@ -1,0 +1,48 @@
+.invite-dialog { width: min(550px, calc(100vw - 32px)); }
+.invite-content { padding: 26px; color: #776580; }
+.invite-intro { display: flex; align-items: center; gap: 16px; }
+.invite-symbol { display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; width: 62px; height: 62px; border: 1px solid #e5d9ef; border-radius: 19px; color: #9c7fba; background: #f4edf9; }
+.invite-intro > div { min-width: 0; }
+.invite-intro .eyebrow { color: #a68fba; font-size: 8px; letter-spacing: 1.4px; margin-bottom: 8px; }
+.invite-intro h3 { font-size: 18px; line-height: 1.6; font-weight: 550; color: #765885; margin-bottom: 6px; }
+.invite-intro > div > p:last-child { font-size: 12px; line-height: 1.8; margin: 0; color: #967dA5; }
+.invite-steps { display: grid; gap: 14px; list-style: none; margin: 26px 0 21px; padding: 0; }
+.invite-steps li { display: flex; align-items: center; gap: 12px; }
+.invite-steps li > span { display: grid; place-items: center; flex-shrink: 0; width: 29px; height: 29px; border-radius: 50%; border: 1px solid #e9dff1; background: #faf7fd; color: #a88aba; font-size: 10px; }
+.invite-steps p { margin: 0; font-size: 12px; line-height: 1.85; color: #947aA3; }
+.invite-steps strong { color: #81618f; font-weight: 500; }
+.invite-expectation { color: #92799f; background: #faf6fd; border: 1px solid #eee4f5; padding: 12px 14px; border-radius: 9px; margin: 0 0 22px; font-size: 11px; line-height: 1.9; }
+.invite-link-label { display: flex; align-items: center; gap: 6px; margin-bottom: 9px; font-size: 12px; color: #9676a8; }
+.invite-link-input { display: block; width: 100%; min-width: 0; min-height: 44px; border: 1px solid #e1d5eb; border-radius: 9px; background: #fefcff; padding: 11px 13px; color: #79568c; font-size: 13px; line-height: 1.6; text-overflow: clip; cursor: text; }
+.invite-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.invite-actions > .button { flex: 1 1 auto; min-height: 42px; font-size: 12px; }
+.invite-actions > .button.primary { background: #9480b9; }
+.invite-actions > .button.secondary { color: #997bac; }
+.invite-feedback { min-height: 36px; margin: 14px 0 0; color: #9b81aa; font-size: 11px; line-height: 1.9; overflow-wrap: anywhere; }
+.invite-feedback.is-copied { color: #8b9675; }
+@media (max-width: 600px) {
+  .invite-content { padding: 22px 20px 19px; }
+  .invite-dialog { width: calc(100vw - 22px); }
+  .invite-intro { gap: 12px; align-items: flex-start; }
+  .invite-symbol { width: 45px; height: 45px; border-radius: 14px; margin-top: 2px; }
+  .invite-symbol svg { width: 22px; }
+  .invite-intro h3 { font-size: 16px; }
+  .invite-intro .eyebrow { font-size: 7px; line-height: 1.8; letter-spacing: .8px; margin-bottom: 6px; }
+  .invite-intro > div > p:last-child { font-size: 11px; }
+  .invite-steps { margin-top: 23px; gap: 15px; }
+  .invite-steps li { gap: 10px; }
+  .invite-steps p { font-size: 11px; }
+  .invite-expectation { font-size: 11px; padding: 11px 12px; }
+  .invite-link-input { font-size: 16px; padding: 10px 11px; }
+  .invite-actions { gap: 9px; }
+  .invite-actions > .button { font-size: 11px; padding: 10px 12px; }
+  .invite-feedback { font-size: 10px; }
+}
+@media (max-width: 360px) {
+  .invite-content { padding: 20px 16px 18px; }
+  .invite-intro { gap: 10px; }
+  .invite-intro h3 { font-size: 15px; }
+  .invite-symbol { width: 39px; height: 39px; border-radius: 12px; }
+  .invite-actions { flex-direction: column; }
+  .invite-steps p { font-size: 10px; }
+}

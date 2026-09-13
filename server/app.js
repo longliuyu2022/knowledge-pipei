@@ -8,6 +8,8 @@ import { Intelligence } from './ai.js';
 import { Zhihu } from './zhihu.js';
 import { Pairing } from './pairing.js';
 import { createAdminRouter } from './admin.js';
+import { createConversationContextRouter } from './conversation-context.js';
+import { checkZhihuData, zhihuCheckRetryAt } from './zhihu-validation.js';
 import { AppError, fail, requiredText, optionalText } from './errors.js';
 import { buildProfile, compareProfiles, DEMO_PROFILES, SAMPLE_PROFILE } from './matching.js';
 import { TOPIC_MAP, GOALS, STYLES } from '../shared/catalog.js';
@@ -78,7 +80,7 @@ export function createApp(config, options = {}) {
   function snapshot(req) {
     return { user: req.viewer, csrf: req.csrf, profile: store.profile(req.viewer.id), sampleProfile: SAMPLE_PROFILE,
       capabilities: capabilities(config), zhihuConnected: Boolean(zhihu.token(req.viewer.id)),
-      imports: { count: store.imports(req.viewer.id).items.length, fetchedAt: store.imports(req.viewer.id).fetchedAt },
+      imports: { count: store.imports(req.viewer.id).items.length, fetchedAt: store.imports(req.viewer.id).fetchedAt, checkedAt: store.zhihuValidation(req.viewer.id)?.checkedAt || null },
       savedIds: store.savedIds(req.viewer.id), incomingCount: store.invitations(req.viewer.id).filter(i => i.direction === 'incoming' && i.status === 'pending').length };
   }
   async function mutate(userId, job) {
@@ -225,6 +227,7 @@ export function createApp(config, options = {}) {
     const conversation = store.conversation(req.viewer.id, req.params.id);
     res.json({ person: store.publicUser(conversation.sender_id === req.viewer.id ? conversation.recipient_id : conversation.sender_id, req.viewer.id, true), invitation: conversation.message, ...store.messages(req.viewer.id, req.params.id, typeof req.query.before === 'string' ? req.query.before : null) });
   });
+  app.use('/api/conversations', createConversationContextRouter({ store, ai, zhihu, rate }));
   app.post('/api/conversations/:id/messages', (req, res) => {
     rate(`message:${req.viewer.id}`, 30);
     const clientMessageId = req.body.clientMessageId;
@@ -276,6 +279,23 @@ export function createApp(config, options = {}) {
       res.redirect('/?auth=success#profile');
     } catch { res.redirect('/?auth=failed#profile'); }
   });
+  const validationState = userId => ({ report: store.zhihuValidation(userId), connected: Boolean(zhihu.token(userId)), retryAt: zhihuCheckRetryAt(zhihu) });
+  app.get('/api/zhihu/validation', (req, res) => res.json(validationState(req.viewer.id)));
+  app.post('/api/zhihu/validation', async (req, res) => {
+    if (req.viewer.provider !== 'zhihu') fail(401, 'zhihu_required', '请先连接你自己的知乎账号');
+    if (req.body.consent !== true) fail(400, 'consent_required', '请先确认检查范围：五类公开数据，每项最多一条');
+    rate(`zhihu-check:${req.viewer.id}`, 2);
+    const result = await mutate(req.viewer.id, async () => {
+      const assertCurrent = () => {
+        if (store.session(req.cookies.soul_session)?.user.id !== req.viewer.id) fail(401, 'session_expired', '当前会话已结束，请重新连接');
+      };
+      const report = await checkZhihuData(zhihu, req.viewer.id, assertCurrent);
+      assertCurrent();
+      store.saveZhihuValidation(req.viewer.id, report);
+      return validationState(req.viewer.id);
+    });
+    emit(req.viewer.id); res.json(result);
+  });
   app.post('/api/zhihu/import', async (req, res) => {
     const sources = req.body.sources;
     if (req.body.useAI !== undefined && typeof req.body.useAI !== 'boolean') fail(400, 'invalid_input', 'AI 分析选项格式不正确');
@@ -306,7 +326,7 @@ export function createApp(config, options = {}) {
   });
   app.get('/api/account/export', (req, res) => {
     res.set('Content-Disposition', 'attachment; filename="tongpin-my-data.json"');
-    res.json({ exportedAt: new Date().toISOString(), user: req.viewer, profile: store.profile(req.viewer.id), imports: store.imports(req.viewer.id), savedIds: store.savedIds(req.viewer.id) });
+    res.json({ exportedAt: new Date().toISOString(), user: req.viewer, profile: store.profile(req.viewer.id), imports: store.imports(req.viewer.id), zhihuValidation: store.zhihuValidation(req.viewer.id), savedIds: store.savedIds(req.viewer.id) });
   });
   app.post('/api/logout', (req, res) => {
     if (mutations.has(req.viewer.id)) fail(409, 'profile_busy', '画像正在更新，完成后再退出');

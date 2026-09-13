@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { ArrowRight, ArrowUpRight, BookOpen, Check, CheckCheck, Circle, Clock3, Compass, HeartHandshake, Info, LockKeyhole, MessageCircle, Radio, RefreshCw, ShieldCheck, Shuffle, Sparkles, Waves, WifiOff, X } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, BookOpen, Check, CheckCheck, Circle, Clock3, Compass, HeartHandshake, Info, LockKeyhole, MessageCircle, Radio, RefreshCw, Share2, ShieldCheck, Shuffle, Sparkles, UsersRound, Waves, WifiOff, X } from 'lucide-react';
 import { GOALS, TOPIC_MAP } from '../shared/catalog.js';
 import { api, APIError, messageOf } from './api';
 import { Avatar, PageTitle, Spinner } from './components';
+import { InviteDialog } from './InviteDialog';
 import type { Mode, PageActions, PairingState } from './types';
 import './pairing.css';
 
@@ -42,6 +43,7 @@ export function PairingPage({ actions, onConnected }: { actions: PageActions; on
   const [error, setError] = useState('');
   const [syncError, setSyncError] = useState('');
   const [offline, setOffline] = useState(!navigator.onLine);
+  const [inviteOpen, setInviteOpen] = useState(false);
   const [now, setNow] = useState(Date.now());
   const mounted = useRef(false);
   const epoch = useRef(0);
@@ -145,6 +147,7 @@ export function PairingPage({ actions, onConnected }: { actions: PageActions; on
   const candidate = state?.pair && !state.pair.person.demo ? state.pair.person : null;
   const pair = candidate ? state?.pair : null;
   const networkUncertain = offline || Boolean(syncError);
+  const queue = !loading && !networkUncertain ? state?.queue : null;
   const controlsDisabled = Boolean(busy) || loading || networkUncertain;
   const notice = state?.reason ? reasonText[state.reason] || state.notice : state?.notice;
   const timerText = remaining === null ? '' : `${Math.floor(remaining / 60)}:${String(remaining % 60).padStart(2, '0')}`;
@@ -203,12 +206,17 @@ export function PairingPage({ actions, onConnected }: { actions: PageActions; on
 
   return <div className="pairing-page" data-testid="pairing-page">
     <PageTitle eyebrow="A GOOD CONVERSATION STARTS HERE" title="此刻，遇见同频的人" description="主动迈出一小步，把现在留给一场好对话。">
-      <span className="pairing-title-badge"><HeartHandshake size={16} />主动在线 · 双方同意</span>
+      <div className="pairing-title-actions"><span className="pairing-title-badge"><HeartHandshake size={16} />主动在线 · 双方同意</span><button type="button" className="button secondary pairing-invite-button" data-testid="pairing-invite" onClick={() => setInviteOpen(true)}><Share2 size={15}/>邀请朋友一起配对</button></div>
     </PageTitle>
     <div className="pairing-layout">
       <section className={`panel pairing-stage pairing-stage-${status}`} aria-labelledby="pairing-stage-title">
         <div className="pairing-stage-top"><span><Radio size={14} />此刻配对</span><span><LockKeyhole size={13} />无需加入公开发现</span></div>
         <p className={`pairing-state-label ${active ? 'is-active' : ''}`} data-testid="pairing-status" data-status={status} role="status" aria-live="polite"><i />{statusLabel}</p>
+        <div className="pairing-queue-summary" data-testid="pairing-queue" data-updated-at={queue?.updatedAt}>
+          <div role="status" aria-live="polite" aria-atomic="true"><UsersRound size={15}/><strong data-testid="pairing-queue-count">{queue ? `${queue.waiting.toLocaleString('zh-CN')} 人正在排队` : loading ? '正在同步排队人数…' : '排队人数暂未同步'}</strong>{queue && <span data-testid="pairing-queue-confirming">{queue.confirming.toLocaleString('zh-CN')} 人确认中</span>}</div>
+          <p>{queue ? '全站排队人数包含正在等待的自己，正在确认者另计。' : '连接恢复后，会显示实际的排队人数。'}</p>
+          {queue?.waiting === 0 && queue.confirming === 0 && <p className="pairing-queue-empty">此刻还没有人等待，可以邀请朋友各自开始配对。</p>}
+        </div>
 
         {(offline || syncError) && <div className="pairing-network-note" role="alert"><WifiOff size={18} /><div><strong>{offline ? '网络连接已断开' : '暂时无法同步在线状态'}</strong><p>页面可能显示上次同步的状态。持续离线会结束本轮，恢复后会重新核对，不会自动开始新一轮。</p>{syncError && <small>{syncError}</small>}</div><button type="button" className="text-button" onClick={retrySync} disabled={Boolean(busy) || offline}>重新同步</button></div>}
         {notice && <div className="pairing-notice" role="status"><Info size={15} /><p>{notice}</p></div>}
@@ -276,5 +284,6 @@ export function PairingPage({ actions, onConnected }: { actions: PageActions; on
         <section className="pairing-how-it-works"><h3>相遇可以简单，也可以认真</h3><ol><li className={status !== 'idle' ? 'reached' : ''}><span>01</span><div><strong>现在，我想聊聊</strong><p>你主动开始，才会加入在线等待。</p></div></li><li className={status === 'proposed' || status === 'connected' ? 'reached' : ''}><span>02</span><div><strong>把选择留给彼此</strong><p>看到真实画像，双方各自确认。</p></div></li><li className={status === 'connected' ? 'reached' : ''}><span>03</span><div><strong>让一句话，成为开始</strong><p>双方同意后，才会开启私聊。</p></div></li></ol><p><ShieldCheck size={14} />等待和确认期间，都可以随时取消。</p></section>
       </aside>
     </div>
+    {inviteOpen && <InviteDialog onClose={() => setInviteOpen(false)}/>}
   </div>;
 }

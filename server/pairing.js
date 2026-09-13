@@ -131,10 +131,24 @@ export class Pairing {
       this.update(b, { status: 'proposed', pairId: pair.id, partnerId: a.userId, reason: null });
     }
   }
+  queueSnapshot() {
+    let waiting = 0, confirming = 0;
+    // The map has one entry per user. All public snapshots follow tick(), which
+    // removes expired presence; reading these totals never joins or renews a round.
+    for (const [userId, state] of this.states) {
+      if (!active(state)) continue;
+      const user = this.store.user(userId);
+      if (!user || user.provider === 'demo') continue;
+      if (state.status === 'searching') waiting++;
+      else confirming++;
+    }
+    return { waiting, confirming, updatedAt: new Date(this.now()).toISOString() };
+  }
   snapshot(userId) {
     const state = this.states.get(userId);
     const result = { status: state?.status || 'idle', attemptId: state?.attemptId || null, mode: state?.mode || 'resonance', topic: state?.topic || null,
-      expiresAt: null, heartbeatExpiresAt: null, pair: null, conversationId: state?.conversationId || null, reason: state?.reason || null, notice: state?.reason ? notices[state.reason] || null : null };
+      expiresAt: null, heartbeatExpiresAt: null, pair: null, conversationId: state?.conversationId || null, reason: state?.reason || null, notice: state?.reason ? notices[state.reason] || null : null,
+      queue: this.queueSnapshot() };
     if (!state) return result;
     if (active(state)) result.heartbeatExpiresAt = new Date(state.lastSeen + this.offlineMs).toISOString();
     if (state.status === 'searching') result.expiresAt = new Date(state.queueExpiresAt).toISOString();

@@ -57,7 +57,8 @@ Node.js 22.13+、Express 5、SQLite。生产环境由同一个服务提供前端
   "pair": null,
   "conversationId": null,
   "reason": null,
-  "notice": null
+  "notice": null,
+  "queue": { "waiting": 0, "confirming": 0, "updatedAt": "2026-09-13T04:00:00.000Z" }
 }
 ```
 
@@ -77,7 +78,11 @@ Node.js 22.13+、Express 5、SQLite。生产环境由同一个服务提供前端
 
 每用户 start 每分钟最多 12 次，heartbeat/respond 各最多 30 次。单进程最多容纳 200 位进行中的参与者，满员返回 429 `pairing_full`。自动化测试可通过 `createApp(config, {pairingOptions:{now, offlineMs, queueMs, proposalMs, sweepMs}})` 注入时钟与期限，生产环境不提供修改时间的 HTTP 接口。
 
+所有配对响应中的 `queue` 都只含全站汇总：`waiting` 为持续在线的排队人数（包含等待中的本人），`confirming` 为候选确认中的人数，按用户去重；不统计只浏览者、体验人物和已连接用户。不返回队列名单。状态读取先按既有时限清理，但不会让读取者入队或续期。页面每 10 秒同步，并在断网时收起过期数字。
+
 ## 邀请、对话与屏蔽
+
+邀请弹窗只复制或经用户点击调用系统分享 `location.origin + '/#pairing'`，不附带用户 ID、会话或 Query。它是公开参与入口，不指定配对对象；接收者需要自己创建画像和点击开始。
 
 | 方法与路径 | 输入 | 返回与行为 |
 | --- | --- | --- |
@@ -85,12 +90,16 @@ Node.js 22.13+、Express 5、SQLite。生产环境由同一个服务提供前端
 | `POST /api/invitations` | `{targetId, message}`，消息 2–500 字符 | `201 {id}`；双方需在真实匹配池，体验人物不能邀请 |
 | `POST /api/invitations/:id/respond` | `{action:"accept"\|"decline"}` | `{ok:true}`；仅接收人可处理一次待处理邀请 |
 | `GET /api/conversations/:id` | 可选 `before=<消息ID>` | `{person, invitation, items, hasMore, nextBefore}`；每页最多 100 条，页内按发送顺序排列 |
+| `GET /api/conversations/:id/context` | 无 | `{shared, reasons, questions, mode:"rules"}`；恰好三条开场建议，仅读取双方真实画像 |
+| `POST /api/conversations/:id/icebreakers` | 空对象 | `{mode, questions, sourceIds, sources, sourceNotice, notice?}`；主动生成更多聊天灵感 |
 | `POST /api/conversations/:id/messages` | `{text, clientMessageId?}`，正文 1–2000 字符 | `201 {id, authorId, text, createdAt}`；仅已接受连接中的本人可发送 |
 | `POST /api/blocked/:id` | 空对象 | `{ok:true}`；取消双方邀请/连接、删除双向收藏、阻止画像与对话访问 |
 | `GET /api/blocked` | 无 | `{people:[{id,name}]}` |
 | `DELETE /api/blocked/:id` | 空对象 | `{ok:true}`；不会自动恢复旧邀请或聊天授权 |
 
 `clientMessageId` 是可选 UUID，建议浏览器使用 `crypto.randomUUID()`。按作者、会话及此 ID 保证唯一；同一正文的网络重试返回原消息，同一 ID 搭配不同正文返回 409 `client_message_conflict`。前端在失败重试时保留 ID，编辑正文或发送成功后生成新 ID。省略此字段兼容旧客户端。SQLite 启动时自动迁移既有消息表，重启后仍能去重。
+
+聊天上下文仅供已接受连接中的双方，私密画像的已建立连接也可使用。默认读取不调用知乎或模型、不写消息；双方缺少真实画像时返回 409 `conversation_profile_required`，不替换为演示画像。主动生成每用户每分钟最多 12 次，在搜索和模型调用结束后分别复查原会话、连接、屏蔽及双方画像版本；画像已变化返回 409 `conversation_profile_changed`。搜索或模型失败时保留三条明确标记的规则建议。点选建议只追加到当前草稿，超过 2000 字时保留原稿，由用户另行点击发送。
 
 ## 知乎连接与个人数据
 
@@ -99,9 +108,11 @@ Node.js 22.13+、Express 5、SQLite。生产环境由同一个服务提供前端
 | `POST /api/auth/zhihu/start` | 空对象 | `{url}`；由浏览器跳转到知乎完成本人授权 |
 | `GET /auth/callback` | OAuth 原始 Query | `302` 原样转发 Query 至下方内部回调，兼容赛事生成器要求的路径后缀 |
 | `GET /api/auth/zhihu/callback` | `state` 和 `authorization_code` 或 `code` | 跳回 `/?auth=success\|failed\|state_error\|cancelled#profile` |
+| `GET /api/zhihu/validation` | 无 | `{report, connected, retryAt}`；只读取本人最近检查结果与当前连接状态，不发起外部请求 |
+| `POST /api/zhihu/validation` | `{consent:true}` | 同上；使用当前 OAuth 用户逐项检查五类公开数据，每项 `Limit=1` |
 | `POST /api/zhihu/import` | `{sources:["contents"\|"followees"\|"collections"], useAI?}` | `{count, counts, profile}`；仅用户主动勾选的来源，每类最多 10 项 |
-| `DELETE /api/zhihu/import` | 空对象 | `{profile}`；清除导入、重新构建画像并清除当前 OAuth Token |
-| `GET /api/account/export` | 无 | JSON 附件，含当前用户、画像、导入和收藏 |
+| `DELETE /api/zhihu/import` | 空对象 | `{profile}`；清除导入与数据检查记录、重新构建画像并清除当前 OAuth Token |
+| `GET /api/account/export` | 无 | JSON 附件，含当前用户、画像、导入、`zhihuValidation` 和收藏 |
 | `POST /api/logout` | 空对象 | `{ok:true}`；退出匹配、结束会话、清除 OAuth Token 与内存 AI 缓存 |
 | `DELETE /api/account` | `{confirm:"delete"}` | `{ok:true}`；删除该用户及会话、画像、导入、收藏、屏蔽、邀请、消息等关联记录 |
 | `GET /api/events` | EventSource 携带 Cookie | SSE 事件 `changed`、`pool`，25 秒心跳；用于触发界面刷新 |
@@ -123,3 +134,30 @@ OAuth Token 保存在服务端内存中，进程重启后需重新连接；不�
 文本与向量共用每分钟最多 5 次外部调用、最多 2 个并发请求。相同文本结果进行短期缓存，重复并发生成只调用一次。模型不合约、引用不存在、URL 编造、超时或服务故障都回到有说明的规则结果；输出检查不修改分数，也不替用户发送消息。清除缓存后，进行中的旧请求不会重新填入已清除内容。
 
 本地接口另有按身份的限流：画像 8 次/分钟、邀请 5 次/分钟、聊天 30 次/分钟、解释 15 次/分钟、破冰 12 次/分钟、导入 3 次/分钟。知乎业务请求每分钟最多 5 次，缓存与正在进行的相同请求不重复消耗调用。单进程内存限流和 SQLite 适合当前参赛部署；多实例部署需要共享限流、OAuth Token 与事件通道。
+
+### 知乎数据检查报告
+
+`report` 未检查时为 `null`；其他时候为：
+
+```ts
+{
+  checkedAt: string;
+  status: 'passed' | 'partial' | 'failed';
+  items: {
+    id: 'contents' | 'followees' | 'favlists' | 'favlist_contents' | 'collections';
+    label: string;
+    status: 'success' | 'empty' | 'error' | 'skipped';
+    count: 0 | 1 | null;
+    code: string | null;
+    message: string;
+  }[];
+}
+```
+
+检查固定读取创作、关注、收藏夹、首个收藏夹的内容和近期收藏。收藏夹 URL Token 仅在后端使用，并按有符号 Int64 无损校验。无收藏夹时不调用收藏夹内容接口，按官方 Skill 以 `empty` / `no_favorite_list` 记录，说明文字明确本项未读取；这不是该接口已发起请求的证明，也不算失败。其他请求的空列表只表示公开范围为空。授权或限流失败会停止后续读取，未做的项目为 `skipped`，不能记成空数据。
+
+`passed` 表示五项结果均为成功或按上述规则处理的空数据，`partial` 表示部分完成，`failed` 表示没有任何成功或空数据。HTTP 200 只代表得到了检查报告，应读取各项状态判断结果。检查前授权缺失、未经明确同意或正在冷却会直接返回错误，不覆盖上次报告。
+
+每用户每分钟最多发起 2 次检查。检查与导入、搜索共用每分钟 5 次知乎业务请求限制；开始完整检查需要一整个可用窗口，每一项仍经过正常限流。`retryAt` 是最早可再次尝试完整检查的时间；前端展示倒计时，不自动重试。出现日配额限制时等待次日恢复。
+
+只在 `zhihu_validations` 中保存本人最近一次的结果、条数、受控错误原因和时间，不保存检查读到的标题、正文、关注资料、收藏夹标识或授权材料；不会修改画像、导入、可发现状态或配对。`bootstrap.imports.checkedAt` 提供最近检查时间，用于清理入口。本人可下载报告，独立管理员可在用户详情中查看同一份结果；其他普通用户不能查询。清除导入或删除账号会移除检查记录。

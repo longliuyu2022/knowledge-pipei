@@ -19,6 +19,12 @@ function harness(t, options = {}) {
   return { store, pairing, user, changes, advance(ms) { now += ms; pairing.tick(); } };
 }
 const start = (pairing, userId, changes = {}) => pairing.start(userId, { revision: 1, mode: 'resonance', ...changes });
+function assertQueue(state, waiting, confirming) {
+  assert.deepEqual(Object.keys(state.queue).sort(), ['confirming', 'updatedAt', 'waiting']);
+  assert.equal(state.queue.waiting, waiting);
+  assert.equal(state.queue.confirming, confirming);
+  assert.equal(new Date(state.queue.updatedAt).toISOString(), state.queue.updatedAt);
+}
 
 test('online pairing stays idle until explicit start and only proposes another active real participant', t => {
   const { store, pairing, user, changes } = harness(t), a = user('甲'), b = user('乙'), c = user('丙');
@@ -34,6 +40,60 @@ test('online pairing stays idle until explicit start and only proposes another a
   assert.equal(store.profile(a).discoverable, false); assert.equal(store.profile(b).discoverable, false);
   assert.equal(store.people(c).length, 0); assert.equal(store.publicUser(a, c), null);
   assert.ok(changes.includes(a) && changes.includes(b)); assert.equal(changes.includes(c), false);
+});
+
+test('global queue counts unique real waiters and confirming people, excluding browsers, demos and completed connections', t => {
+  const { store, pairing, user } = harness(t);
+  const a = user('正在等待的甲'), b = user('准备开始的乙'), c = user('另一位等待者'), observer = user('仅浏览的用户');
+  const noProfile = store.createUser('尚未创建画像').id, demo = user('体验人物');
+  store.db.prepare("UPDATE users SET provider = 'demo' WHERE id = ?").run(demo);
+  assertQueue(pairing.state(observer), 0, 0);
+  assertQueue(pairing.state(noProfile), 0, 0);
+  assert.equal(pairing.states.size, 0);
+  assert.throws(() => start(pairing, demo), error => error.code === 'profile_required');
+  const first = start(pairing, a);
+  assertQueue(first, 1, 0);
+  assertQueue(start(pairing, a), 1, 0); // A retry or second tab cannot count the same user twice.
+  assertQueue(pairing.heartbeat(a, first.attemptId), 1, 0);
+  assertQueue(pairing.state(observer), 1, 0);
+  const proposal = start(pairing, b);
+  assertQueue(proposal, 0, 2);
+  assertQueue(start(pairing, a), 0, 2);
+  assertQueue(start(pairing, c), 1, 2);
+  assertQueue(pairing.respond(a, proposal.pair.id, 'accept'), 1, 2);
+  const connected = pairing.respond(b, proposal.pair.id, 'accept');
+  assert.equal(connected.status, 'connected');
+  assertQueue(connected, 1, 0);
+  assertQueue(pairing.respond(a, proposal.pair.id, 'accept'), 1, 0);
+  const publicQueue = pairing.state(observer).queue;
+  for (const id of [a, b, c, observer, demo]) assert.equal(JSON.stringify(publicQueue).includes(id), false);
+  assertQueue(pairing.cancel(c), 0, 0);
+  assertQueue(pairing.state(observer), 0, 0);
+  assert.equal(pairing.states.has(observer), false);
+  assert.equal(pairing.states.has(noProfile), false);
+  assert.equal(pairing.states.has(demo), false);
+});
+
+test('reading queue totals never renews presence or rejoins a round after offline expiry', t => {
+  const { pairing, user, advance } = harness(t), waiting = user('等待者'), observer = user('旁观者');
+  const started = start(pairing, waiting);
+  advance(15000);
+  for (let i = 0; i < 20; i++) {
+    assertQueue(pairing.state(observer), 1, 0);
+    const snapshot = pairing.state(waiting);
+    assertQueue(snapshot, 1, 0);
+    assert.equal(snapshot.heartbeatExpiresAt, started.heartbeatExpiresAt);
+    assert.equal(snapshot.expiresAt, started.expiresAt);
+    assert.ok(Date.parse(snapshot.queue.updatedAt) > Date.parse(started.queue.updatedAt));
+  }
+  advance(30000);
+  const expired = pairing.state(waiting);
+  assert.equal(expired.reason, 'offline');
+  assertQueue(expired, 0, 0);
+  assertQueue(pairing.state(observer), 0, 0);
+  assertQueue(pairing.heartbeat(waiting, started.attemptId), 0, 0);
+  assert.equal(pairing.state(waiting).status, 'idle');
+  assert.equal(pairing.states.has(observer), false);
 });
 
 test('start validates profile/revision/filter, is idempotent while active and does not extend queue duration', t => {
@@ -139,6 +199,8 @@ test('45-second offline expiry removes one participant and never silently rejoin
   advance(44000); pairing.heartbeat(b); advance(1001);
   assert.equal(pairing.state(a).status, 'idle'); assert.equal(pairing.state(a).reason, 'offline');
   assert.equal(pairing.state(b).status, 'searching'); assert.equal(pairing.state(b).reason, 'peer_left');
+  assertQueue(pairing.state(b), 1, 0);
+  assertQueue(pairing.state(a), 1, 0);
   assert.equal(pairing.heartbeat(a, first.attemptId).status, 'idle');
   assert.equal(pairing.state(b).pair, null);
 });
@@ -148,11 +210,14 @@ test('queue expiry is three minutes despite heartbeats; a live proposal expires 
   for (let i = 0; i < 5; i++) { queue.advance(30000); queue.pairing.heartbeat(only); }
   assert.equal(queue.pairing.state(only).expiresAt, original.expiresAt);
   queue.advance(30000); assert.equal(queue.pairing.state(only).reason, 'queue_expired');
+  assertQueue(queue.pairing.state(only), 0, 0);
   const proposed = harness(t), a = proposed.user('甲'), b = proposed.user('乙');
   start(proposed.pairing, a); const id = start(proposed.pairing, b).pair.id;
   proposed.advance(30000); proposed.pairing.heartbeat(a); proposed.pairing.heartbeat(b); proposed.advance(30001);
   assert.equal(proposed.pairing.state(a).status, 'searching'); assert.equal(proposed.pairing.state(a).reason, 'proposal_expired');
   assert.equal(proposed.pairing.state(b).status, 'searching'); assert.equal(proposed.pairing.state(b).pair, null);
+  assertQueue(proposed.pairing.state(a), 2, 0);
+  assertQueue(proposed.pairing.state(b), 2, 0);
   assert.equal(proposed.pairing.respond(a, id, 'accept').conversationId, null);
   assert.equal(proposed.store.activeInvitationBetween(a, b), null);
 });
@@ -187,6 +252,7 @@ test('API pairing enforces origin/CSRF, private-candidate isolation and atomical
   await Promise.all(clients.slice(0, 4).map(client => client.request('/api/pairing/start', { method: 'POST', body })));
   const states = await Promise.all(clients.slice(0, 4).map(async client => (await client.request('/api/pairing')).data));
   assert.ok(states.every(state => state.status === 'proposed'));
+  for (const state of states) assertQueue(state, 0, 4);
   assert.equal(new Set(states.map(state => state.pair.id)).size, 2);
   for (let i = 0; i < 4; i++) {
     const state = states[i], other = users.indexOf(state.pair.person.id);
@@ -195,11 +261,13 @@ test('API pairing enforces origin/CSRF, private-candidate isolation and atomical
   }
   const outsider = await clients[4].request(`/api/pairing?userId=${users[0]}`);
   assert.equal(outsider.data.status, 'idle'); assert.equal(outsider.data.pair, null);
+  assertQueue(outsider.data, 0, 4);
   assert.equal((await clients[4].request('/api/pairing/respond', { method: 'POST', body: { pairId: states[0].pair.id, decision: 'accept' } })).status, 404);
   const accepted = await Promise.all(clients.slice(0, 4).map((client, i) => client.request('/api/pairing/respond', { method: 'POST', body: { pairId: states[i].pair.id, decision: 'accept' } })));
   assert.ok(accepted.every(response => response.status === 200));
   assert.equal(service.store.db.prepare("SELECT COUNT(*) AS count FROM invitations WHERE status = 'accepted'").get().count, 2);
   const connected = (await clients[0].request('/api/pairing')).data;
+  assertQueue(connected, 0, 0);
   assert.equal((await clients[0].request(`/api/conversations/${connected.conversationId}`)).status, 200);
   assert.equal((await clients[4].request(`/api/conversations/${connected.conversationId}`)).status, 404);
 });

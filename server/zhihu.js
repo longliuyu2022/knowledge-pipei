@@ -71,6 +71,7 @@ export class Zhihu {
   async business(path, params, userId = null) {
     if (!this.config.zhihu.accessSecret) fail(503, 'zhihu_unconfigured', '知乎内容连接暂未开放，可以先填写兴趣');
     const token = userId ? this.token(userId) : null;
+    const grant = userId ? this.tokens.get(userId) : null;
     if (userId && !token) fail(401, 'zhihu_expired', '请重新连接知乎后再导入');
     this.calls = this.calls.filter(t => Date.now() - t < 60000);
     if (this.cooldown > Date.now() || this.calls.length >= 5) fail(429, 'zhihu_rate_limited', '知乎请求较多或今日额度已用完，请稍后再试');
@@ -81,9 +82,9 @@ export class Zhihu {
     if (userId) headers['X-OAuth-Token'] = token;
     try {
       const response = await this.raw(url, { headers });
-      if (userId && this.token(userId) !== token) fail(401, 'zhihu_expired', '知乎授权已失效，请重新连接');
+      if (userId && (this.token(userId) !== token || this.tokens.get(userId) !== grant)) fail(401, 'zhihu_expired', '知乎授权已失效，请重新连接');
       const code = Number(response.Code);
-      if (code === 20001) { if (userId) this.forget(userId); fail(401, 'zhihu_expired', '知乎授权或内容连接已失效，请重新连接'); }
+      if (code === 20001) fail(401, 'zhihu_expired', '知乎授权或内容连接已失效，请重新连接');
       if (code === 30001 || code === 30002) {
         this.cooldown = code === 30002 ? (Math.floor((Date.now() + 28800000) / 86400000) + 1) * 86400000 - 28800000 : Date.now() + 60000;
         fail(429, 'zhihu_rate_limited', code === 30002 ? '知乎今日额度已用完，暂时无法读取新内容' : '知乎请求较多，请稍后再试');
@@ -91,7 +92,7 @@ export class Zhihu {
       if (code !== 0 || !response.Data || !Array.isArray(response.Data.Items)) fail(502, 'zhihu_response_invalid', '知乎内容响应不完整，请稍后再试');
       return response.Data;
     } catch (error) {
-      if (error.status === 401 && userId) this.forget(userId);
+      if (error.status === 401 && userId && this.tokens.get(userId) === grant) this.forget(userId);
       throw error;
     }
   }

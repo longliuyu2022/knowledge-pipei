@@ -35,6 +35,10 @@ export class Store {
         user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
         data TEXT NOT NULL, fetched_at TEXT NOT NULL
       );
+      CREATE TABLE IF NOT EXISTS zhihu_validations (
+        user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+        data TEXT NOT NULL, checked_at TEXT NOT NULL
+      );
       CREATE TABLE IF NOT EXISTS saved (
         user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
         target_id TEXT NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY (user_id, target_id)
@@ -131,7 +135,18 @@ export class Store {
     this.db.prepare('INSERT INTO imports VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, fetched_at = excluded.fetched_at').run(userId, JSON.stringify(items), now());
     return this.imports(userId);
   }
-  clearImports(userId) { this.db.prepare('DELETE FROM imports WHERE user_id = ?').run(userId); }
+  clearImports(userId) {
+    this.db.prepare('DELETE FROM imports WHERE user_id = ?').run(userId);
+    this.db.prepare('DELETE FROM zhihu_validations WHERE user_id = ?').run(userId);
+  }
+  zhihuValidation(userId) {
+    const row = this.db.prepare('SELECT data FROM zhihu_validations WHERE user_id = ?').get(userId);
+    return row ? JSON.parse(row.data) : null;
+  }
+  saveZhihuValidation(userId, report) {
+    this.db.prepare('INSERT INTO zhihu_validations VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, checked_at = excluded.checked_at').run(userId, JSON.stringify(report), report.checkedAt);
+    return report;
+  }
   isBlocked(a, b) { return Boolean(this.db.prepare('SELECT 1 FROM blocked WHERE (user_id = ? AND target_id = ?) OR (user_id = ? AND target_id = ?)').get(a, b, b, a)); }
   publicUser(userId, viewerId, allowConnection = false) {
     const user = this.user(userId), profile = this.profile(userId);

@@ -1,0 +1,31 @@
+{
+  "origin": "https://zhihupipei.aiimage.icu",
+  "startedAt": "2026-09-13T05:12:47.472Z",
+  "status": "passed",
+  "checks": [
+    {
+      "label": "HTTPS 页面与本次构建一致，健康检查正常",
+      "status": "passed"
+    },
+    {
+      "label": "临时访客仅浏览配对页，未创建画像或入队，显示实际汇总人数",
+      "status": "passed"
+    },
+    {
+      "label": "公开邀请入口可复制，链接不携带查询参数或个人身份",
+      "status": "passed"
+    },
+    {
+      "label": "新数据检查与聊天接口上线，未授权用户不能读取他人数据",
+      "status": "passed"
+    },
+    {
+      "label": "320px 配对与邀请页面无横向溢出，浏览器资源无错误",
+      "status": "passed"
+    }
+  ],
+  "pageErrors": [],
+  "assetErrors": [],
+  "cleanup": "temporary guest deleted; never queued, no profile, no model or Zhihu business calls",
+  "finishedAt": "2026-09-13T05:12:51.893Z"
+}

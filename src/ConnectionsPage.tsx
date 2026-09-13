@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ArrowLeft, ArrowUpRight, Bookmark, Check, ChevronRight, Clock3, Inbox, MessageCircle, RefreshCw, Send, ShieldOff, UserRoundCheck } from 'lucide-react';
 import { api, APIError, formatTime, messageOf } from './api';
 import { Avatar, Dialog, Empty, MatchCard, PageTitle, Spinner } from './components';
+import { ConversationStarter } from './ConversationStarter';
 import type { Conversation, Invitation, Match, Message, PageActions, Person } from './types';
 import './connections.css';
 
@@ -240,6 +241,8 @@ function ConversationPanel({ invitation, actions, refreshKey, confirmed, draft, 
   const olderRequest = useRef<AbortController | null>(null), olderLock = useRef(false);
   const generation = useRef(0), alive = useRef(true);
   const viewport = useRef<HTMLDivElement>(null);
+  const composer = useRef<HTMLTextAreaElement>(null);
+  const draftValue = useRef(draft); draftValue.current = draft;
   const nearBottom = useRef(true), initialScroll = useRef(false);
   const pendingAnchor = useRef<{ height: number; top: number } | null>(null);
   const messages = mergeMessages(conversation?.items || [], confirmed);
@@ -307,9 +310,27 @@ function ConversationPanel({ invitation, actions, refreshKey, confirmed, draft, 
     void onSend();
   }
 
+  function updateDraft(value: string) { draftValue.current = value; onDraft(value); }
+
+  function addQuestion(question: string) {
+    if (!conversation || unavailable) return false;
+    const text = question.trim(), current = draftValue.current;
+    const next = current + (current ? '\n\n' : '') + text;
+    const added = Boolean(text) && next.length <= 2000;
+    if (added) updateDraft(next);
+    window.requestAnimationFrame(() => {
+      if (!alive.current || !composer.current) return;
+      composer.current.focus();
+      const end = composer.current.value.length;
+      composer.current.setSelectionRange(end, end);
+    });
+    return added;
+  }
+
   return <div className="conversation-panel">
     <header className="conversation-header"><button className="icon-button conversation-mobile-back" onClick={onBack} aria-label="返回对话列表"><ArrowLeft size={19}/></button><button className="connection-person-button" onClick={onPerson}><Avatar name={invitation.person.name} seed={invitation.person.id} src={invitation.person.avatar} size={40}/><span><strong>{invitation.person.name}<ChevronRight size={13}/></strong><span>双方已确认连接</span></span></button><button className="icon-button conversation-block-button" onClick={onBlock} disabled={sending} aria-label={`屏蔽${invitation.person.name}`} title="屏蔽这位伙伴"><ShieldOff size={17}/></button></header>
     {error && <div className="connection-error conversation-load-error" role="alert"><p>{error}</p><button className="text-button" onClick={() => setAttempt(value => value + 1)} disabled={loading}>重新读取</button></div>}
+    {conversation && !unavailable && <ConversationStarter key={JSON.stringify([invitation.id, actions.data.profile?.revision, invitation.person])} conversationId={invitation.id} onUseQuestion={addQuestion}/>}
     <div className="conversation-messages" ref={viewport} tabIndex={0} aria-label={`与 ${invitation.person.name} 的消息记录`} onScroll={() => { const element = viewport.current; if (element) nearBottom.current = element.scrollHeight - element.scrollTop - element.clientHeight < 90; }}>
       {!conversation && loading ? <div className="conversation-initial-loading"><Spinner text="正在打开你们的对话…"/></div> : conversation && <>
         <div className="conversation-origin"><span><UserRoundCheck size={13}/>对话始于这次连接</span><p>{conversation.invitation}</p></div>
@@ -320,6 +341,6 @@ function ConversationPanel({ invitation, actions, refreshKey, confirmed, draft, 
         })}</ol> : <div className="conversation-first-message"><MessageCircle size={26}/><p>你们已经连接，第一句留给你们。</p><span>聊聊那个让你想认识 TA 的问题吧。</span></div>}
       </>}
     </div>
-    <form className="conversation-composer" onSubmit={event => { event.preventDefault(); submitMessage(); }}><label className="sr-only" htmlFor={`message-${invitation.id}`}>发送给 {invitation.person.name} 的消息</label><textarea id={`message-${invitation.id}`} value={draft} onChange={event => onDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); submitMessage(); } }} maxLength={2000} rows={3} placeholder="认真回应一个问题，或分享今天的新发现…" disabled={!conversation || unavailable}/>{sendError && <p className="form-error" role="alert">{sendError} 草稿已保留，请确认后重试。</p>}<div className="conversation-composer-footer"><span><span className="conversation-keyboard-tip">Enter 发送 · Shift + Enter 换行</span><span className="conversation-message-count">{draft.length}/2000</span></span><button className="button primary" type="submit" disabled={sending || !draft.trim() || !conversation || unavailable}>{sending ? <Spinner text="发送中…"/> : <><Send size={15}/>发送</>}</button></div></form>
+    <form className="conversation-composer" onSubmit={event => { event.preventDefault(); submitMessage(); }}><label className="sr-only" htmlFor={`message-${invitation.id}`}>发送给 {invitation.person.name} 的消息</label><textarea ref={composer} id={`message-${invitation.id}`} value={draft} onChange={event => updateDraft(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing && event.keyCode !== 229) { event.preventDefault(); submitMessage(); } }} maxLength={2000} rows={3} placeholder="认真回应一个问题，或分享今天的新发现…" disabled={!conversation || unavailable}/>{sendError && <p className="form-error" role="alert">{sendError} 草稿已保留，请确认后重试。</p>}<div className="conversation-composer-footer"><span><span className="conversation-keyboard-tip">Enter 发送 · Shift + Enter 换行</span><span className="conversation-message-count">{draft.length}/2000</span></span><button className="button primary" type="submit" disabled={sending || !draft.trim() || !conversation || unavailable}>{sending ? <Spinner text="发送中…"/> : <><Send size={15}/>发送</>}</button></div></form>
   </div>;
 }

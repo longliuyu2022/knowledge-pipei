@@ -1,5 +1,13 @@
 .pairing-page { min-width: 0; }
 .pairing-title-badge { display: inline-flex; align-items: center; gap: 7px; color: #988baf; font-size: 11px; white-space: nowrap; padding: 9px 12px; border: 1px solid #e7e0f0; border-radius: 20px; background: #faf8fd; }
+.pairing-title-actions { display: flex; justify-content: flex-end; align-items: center; flex-wrap: wrap; gap: 10px; }
+.pairing-title-actions .pairing-invite-button { color: #88709c; font-size: 11px; min-height: 36px; padding: 9px 12px; }
+.pairing-queue-summary { margin: 13px 22px 4px; text-align: center; }
+.pairing-queue-summary > div { display: flex; align-items: center; justify-content: center; gap: 7px; flex-wrap: wrap; color: #a38ab6; line-height: 1.8; }
+.pairing-queue-summary strong { font-size: 14px; font-weight: 500; color: #86659a; font-variant-numeric: tabular-nums; }
+.pairing-queue-summary > div > span { font-size: 10px; color: #a18aaf; padding: 3px 7px; margin-left: 3px; border: 1px solid #eae1f1; border-radius: 5px; background: #faf6fd; }
+.pairing-queue-summary > p { font-size: 10px; line-height: 1.9; color: #9984a7; margin: 6px 0 0; }
+.pairing-queue-summary > .pairing-queue-empty { color: #a18caa; margin-top: 3px; }
 .pairing-layout { display: grid; grid-template-columns: minmax(0, 1fr) 296px; gap: 25px; align-items: start; }
 .pairing-stage { overflow: hidden; min-width: 0; background: linear-gradient(143deg, #fff 3%, #fcfaff 60%, #f8f8f4 100%); position: relative; }
 .pairing-stage-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 28px; padding: 21px 0 19px; border-bottom: 1px solid #ede8f3; }
@@ -190,6 +198,11 @@
 @media (max-width: 1000px) { .pairing-layout { grid-template-columns: minmax(0, 1fr); }.pairing-aside { grid-template-columns: 1fr 1fr; align-items: start; }.pairing-preferences { grid-row: span 2; }.pairing-title-badge { font-size: 10px; }.pairing-proposal-heading { flex-wrap: nowrap; }.pairing-stage-top { margin-left: 28px; margin-right: 28px; }.pairing-proposed-content { padding-left: 28px; padding-right: 28px; }.pairing-person-header > .avatar { width: 64px !important; height: 64px !important; }.pairing-person-header h3 { font-size: 20px; } }
 @media (max-width: 650px) {
   .pairing-page .page-title { gap: 13px; margin-bottom: 21px; }
+  .pairing-title-actions { justify-content: flex-start; gap: 9px; }
+  .pairing-title-actions .pairing-invite-button { font-size: 10px; padding: 8px 10px; min-height: 34px; }
+  .pairing-queue-summary { margin: 12px 17px 1px; }
+  .pairing-queue-summary strong { font-size: 13px; }
+  .pairing-queue-summary > p { font-size: 9px; }
   .pairing-page .page-title h1 { font-size: 23px; }
   .pairing-title-badge { padding: 7px 10px; font-size: 9px; }
   .pairing-layout { gap: 18px; }

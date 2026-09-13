@@ -30,6 +30,17 @@ export function modelNotice(reason) {
   return '模型暂时不可用，本次使用规则分析。';
 }
 
+// Synchronous suggestions are also used when opening an accepted conversation.
+// This helper never invokes a model, search provider or persistence method.
+export function ruleIcebreakers(match) {
+  const topic = match.shared[0]?.label || match.interests[0]?.label || '最近的阅读';
+  return [
+    `看到你${match.shared.length ? '也' : ''}对${topic}感兴趣，最近有没有一个让你忍不住想分享的新发现？`,
+    match.question ? `你提到「${match.question}」——是什么具体经历让你开始想这个问题的？` : `关于${topic}，有没有一个你曾经相信、后来改变了看法的观点？`,
+    `要不要各自挑一篇关于${topic}的好内容，交换一个赞同的观点和一个还没想明白的问题？`,
+  ];
+}
+
 export class Intelligence {
   constructor(config, { fetchImpl = fetch } = {}) {
     this.config = config; this.fetch = fetchImpl;
@@ -120,12 +131,7 @@ export class Intelligence {
     });
   }
   async icebreakers(own, match, sources = []) {
-    const topic = match.shared[0]?.label || match.interests[0]?.label || '最近的阅读';
-    const fallback = [
-      `看到你${match.shared.length ? '也' : ''}对${topic}感兴趣，最近有没有一个让你忍不住想分享的新发现？`,
-      match.question ? `你提到「${match.question}」——是什么具体经历让你开始想这个问题的？` : `关于${topic}，有没有一个你曾经相信、后来改变了看法的观点？`,
-      `要不要各自挑一篇关于${topic}的好内容，交换一个赞同的观点和一个还没想明白的问题？`,
-    ];
+    const fallback = ruleIcebreakers(match);
     const data = { commonInterests: match.shared, myQuestion: own.input.question, partner: { about: match.about, question: match.question, style: match.style.label }, sources: sources.map(s => ({ id: s.id, title: s.title, summary: s.summary })) };
     return this.memo(`ice:${hash(data)}`, async () => {
       try {

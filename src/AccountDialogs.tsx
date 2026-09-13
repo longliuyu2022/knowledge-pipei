@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useRef, useState, type FormEvent } from 
 import { ArrowDownToLine, ArrowRight, ArrowUpRight, BookOpen, Bookmark, Check, CircleHelp, Eye, FileText, LockKeyhole, LogOut, RefreshCw, ShieldCheck, Sparkles, Trash2, UserRound, Users } from 'lucide-react';
 import { api, APIError, formatTime, messageOf } from './api';
 import { Avatar, Dialog, Spinner } from './components';
+import { ZhihuDataCheck } from './ZhihuDataCheck';
 import type { PageActions, Profile } from './types';
 import './profile.css';
 
@@ -77,9 +78,9 @@ export function SettingsDialog({ actions, onClose, onReset }: DialogProps & { on
       }} /><span aria-hidden="true" /></label>
     </div>{!data.profile && <button className="text-button" disabled={Boolean(busy)} onClick={() => { onClose(); actions.onCreate(); }}>先创建自己的兴趣画像<ArrowRight size={14} /></button>}</section>
 
-    <section className="account-section"><h3><LockKeyhole size={17} />我的数据</h3><div className="account-setting-row"><div><strong>导出我的资料</strong><p>下载账号资料、画像、导入摘要和收藏记录，保存为 JSON 文件。</p></div><button className="button secondary account-small-button" disabled={Boolean(busy)} onClick={exportData}>{busy === 'export' ? <Spinner text="导出中…" /> : <><ArrowDownToLine size={15} />导出</>}</button></div>
-      <div className="account-setting-row"><div><strong>知乎导入内容</strong><p>{data.imports.count ? `已导入 ${data.imports.count} 条摘要${data.imports.fetchedAt ? ` · ${formatTime(data.imports.fetchedAt)}` : ''}` : '尚未导入知乎摘要'}。清除后保留手动填写的兴趣。</p></div><button className="text-button account-danger-text" disabled={Boolean(busy) || !data.imports.count} onClick={() => setConfirm('imports')}>清除导入</button></div>
-      {confirmAction === 'imports' && <div className="account-confirm-box"><strong>清除已导入的摘要？</strong><p>画像将按手动填写的兴趣重新生成，并暂时退出匹配池。本次知乎连接也会结束，再次导入需要重新连接。</p><div><button className="button secondary account-small-button" disabled={Boolean(busy)} onClick={() => setConfirm(null)}>取消</button><button className="button account-danger-button account-small-button" disabled={Boolean(busy)} onClick={() => void change('imports', async () => { await api('/zhihu/import', { method: 'DELETE' }); }, '导入已清除。请查看更新后的画像，再决定是否重新加入匹配。')}>{busy === 'imports' ? <Spinner text="清除中…" /> : '确认清除'}</button></div></div>}
+    <section className="account-section"><h3><LockKeyhole size={17} />我的数据</h3><div className="account-setting-row"><div><strong>导出我的资料</strong><p>下载账号资料、画像、导入摘要、数据检查结果和收藏记录，保存为 JSON 文件。</p></div><button className="button secondary account-small-button" disabled={Boolean(busy)} onClick={exportData}>{busy === 'export' ? <Spinner text="导出中…" /> : <><ArrowDownToLine size={15} />导出</>}</button></div>
+      <div className="account-setting-row"><div><strong>知乎导入内容</strong><p>{data.imports.count ? `已导入 ${data.imports.count} 条摘要${data.imports.fetchedAt ? ` · ${formatTime(data.imports.fetchedAt)}` : ''}` : '尚未导入知乎摘要'}。{data.imports.checkedAt && `最近检查：${formatTime(data.imports.checkedAt)}。`}清除后保留手动填写的兴趣。</p></div><button className="text-button account-danger-text" disabled={Boolean(busy) || (!data.imports.count && !data.imports.checkedAt)} onClick={() => setConfirm('imports')}>清除导入</button></div>
+      {confirmAction === 'imports' && <div className="account-confirm-box"><strong>清除已导入的摘要？</strong><p>导入摘要和数据检查记录将一并清除。画像将按手动填写的兴趣重新生成，并暂时退出匹配池。本次知乎连接也会结束，再次导入需要重新连接。</p><div><button className="button secondary account-small-button" disabled={Boolean(busy)} onClick={() => setConfirm(null)}>取消</button><button className="button account-danger-button account-small-button" disabled={Boolean(busy)} onClick={() => void change('imports', async () => { await api('/zhihu/import', { method: 'DELETE' }); }, '导入已清除。请查看更新后的画像，再决定是否重新加入匹配。')}>{busy === 'imports' ? <Spinner text="清除中…" /> : '确认清除'}</button></div></div>}
     </section>
 
     <section className="account-section"><h3><ShieldCheck size={17} />屏蔽的伙伴</h3><p className="account-section-note">取消屏蔽后，你们可以在符合匹配条件时重新发现彼此。</p>
@@ -146,16 +147,18 @@ export function ImportDialog({ actions, onClose }: DialogProps) {
   const [sources, setSources] = useState<ImportSource[]>([]);
   const [useAI, setUseAI] = useState(data.capabilities.ai);
   const [busy, setBusy] = useState(false);
+  const [checking, setChecking] = useState(false);
   const pending = useRef(false);
   const [error, setError] = useState('');
   const [needsConnection, setNeedsConnection] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
   const [refreshFailed, setRefreshFailed] = useState(false);
+  const working = busy || checking;
   const available = data.capabilities.zhihuData && data.zhihuConnected && !needsConnection;
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (pending.current || !sources.length || !available) return;
+    if (pending.current || checking || !sources.length || !available) return;
     pending.current = true; setBusy(true); setError('');
     try {
       const response = await api<ImportResult>('/zhihu/import', { method: 'POST', json: { sources, useAI } });
@@ -169,26 +172,27 @@ export function ImportDialog({ actions, onClose }: DialogProps) {
   }
 
   async function retryRefresh() {
-    if (pending.current) return;
+    if (pending.current || checking) return;
     pending.current = true; setBusy(true); setError('');
     try { await actions.refresh(); setRefreshFailed(false); }
     catch (cause) { setError(messageOf(cause)); }
     finally { pending.current = false; setBusy(false); }
   }
 
-  return <Dialog title="从知乎，补充兴趣的线索" onClose={onClose} busy={busy} className="import-dialog">
+  return <Dialog title="从知乎，补充兴趣的线索" onClose={onClose} busy={busy || checking} className={`import-dialog ${checking ? 'is-checking' : ''}`}>
     {result ? <div className="import-result"><span className={`import-result-icon ${result.count ? '' : 'empty'}`}>{result.count ? <Check size={30} /> : <BookOpen size={30} />}</span><h3>{result.count ? `收集到 ${result.count} 条兴趣线索` : '这次还没有找到可用的公开摘要'}</h3><p>{result.count ? result.profile ? '画像已结合这些摘要更新。查看新的画像后，可以重新选择让伙伴发现你。' : '线索已保存，创建画像时可以把它们与自己的兴趣放在一起。' : '可以继续手动填写兴趣，也可以在有新的公开内容后再导入。'}</p><div className="import-result-counts">{importOptions.filter(option => sources.includes(option.id)).map(option => <span key={option.id}><option.Icon size={16} />{option.label}<strong>{result.counts[option.id] || 0} {option.unit}</strong></span>)}</div>
       {error && <p className="form-error" role="alert">{error}</p>}
-      {refreshFailed ? <button className="button primary" disabled={busy} onClick={retryRefresh}>{busy ? <Spinner text="同步中…" /> : <><RefreshCw size={16} />同步最新资料</>}</button> : <button className="button primary" onClick={() => { onClose(); if (result.profile) actions.navigate('profile'); else actions.onCreate(); }}>{result.profile ? '查看我的知识人格' : '创建我的知识人格'}<ArrowRight size={16} /></button>}
-      <button className="text-button" disabled={busy} onClick={onClose}>完成</button>
+      {refreshFailed ? <button className="button primary" disabled={working} onClick={retryRefresh}>{busy ? <Spinner text="同步中…" /> : <><RefreshCw size={16} />同步最新资料</>}</button> : <button className="button primary" disabled={working} onClick={() => { onClose(); if (result.profile) actions.navigate('profile'); else actions.onCreate(); }}>{result.profile ? '查看我的知识人格' : '创建我的知识人格'}<ArrowRight size={16} /></button>}
+      <button className="text-button" disabled={working} onClick={onClose}>完成</button>
     </div> : <form onSubmit={submit}>
       <div className="import-intro"><span><BookOpen size={23} /></span><div><h3>你选择的内容，才会成为线索</h3><p>只读取你主动勾选的公开摘要与简介，每类最多 10 条。</p></div></div>
       {!available && <div className="login-status-note"><CircleHelp size={18} /><div><strong>{!data.capabilities.zhihuData ? '知乎内容导入暂未开放' : '请先连接自己的知乎账号'}</strong><p>{!data.capabilities.zhihuData ? '现在仍可用手动填写的兴趣生成画像。' : '连接后，你可以选择要导入的内容。'}</p></div></div>}
-      <fieldset disabled={busy || !available} className="import-options"><legend className="import-options-legend">选择本次导入的来源</legend>{importOptions.map(option => <label key={option.id} className={`import-source-option ${sources.includes(option.id) ? 'selected' : ''}`}><input type="checkbox" checked={sources.includes(option.id)} onChange={event => { setSources(current => event.target.checked ? [...current, option.id] : current.filter(id => id !== option.id)); setError(''); }} /><span className="import-source-icon"><option.Icon size={20} /></span><span className="import-source-text"><strong>{option.label}<small>最多 10 {option.unit}</small></strong><span>{option.description}</span></span></label>)}</fieldset>
-      {data.profile && <label className={`wizard-consent import-ai-consent ${!available || !data.capabilities.ai ? 'unavailable' : ''}`}><input type="checkbox" checked={useAI} disabled={busy || !available || !data.capabilities.ai} onChange={event => setUseAI(event.target.checked)} /><span><strong><Sparkles size={15} />使用 AI 重新解读我的画像</strong><small>{data.capabilities.ai ? '允许将所选摘要与已有兴趣交给 AI 解读。关闭后按兴趣规则更新。' : 'AI 解读暂不可用，将按兴趣规则更新。'}</small></span></label>}
+      <fieldset disabled={working || !available} className="import-options"><legend className="import-options-legend">选择本次导入的来源</legend>{importOptions.map(option => <label key={option.id} className={`import-source-option ${sources.includes(option.id) ? 'selected' : ''}`}><input type="checkbox" checked={sources.includes(option.id)} onChange={event => { setSources(current => event.target.checked ? [...current, option.id] : current.filter(id => id !== option.id)); setError(''); }} /><span className="import-source-icon"><option.Icon size={20} /></span><span className="import-source-text"><strong>{option.label}<small>最多 10 {option.unit}</small></strong><span>{option.description}</span></span></label>)}</fieldset>
+      {data.profile && <label className={`wizard-consent import-ai-consent ${!available || !data.capabilities.ai ? 'unavailable' : ''}`}><input type="checkbox" checked={useAI} disabled={working || !available || !data.capabilities.ai} onChange={event => setUseAI(event.target.checked)} /><span><strong><Sparkles size={15} />使用 AI 重新解读我的画像</strong><small>{data.capabilities.ai ? '允许将所选摘要与已有兴趣交给 AI 解读。关闭后按兴趣规则更新。' : 'AI 解读暂不可用，将按兴趣规则更新。'}</small></span></label>}
       <div className="import-scope-note"><LockKeyhole size={15} /><p>{data.imports.count ? '本次导入会替换上次导入的内容。' : '导入的原始摘要仅自己可见，可在设置中清除。'}{data.profile ? '更新后的画像将暂时退出匹配，查看后可重新加入。' : '创建画像时，你可以选择是否使用 AI 解读。'}</p></div>
       {error && <p className="form-error" role="alert">{error}</p>}
-      <div className="import-footer"><button type="button" className="button secondary" disabled={busy} onClick={onClose}>暂不导入</button>{!available ? <button type="button" className="button primary" onClick={() => { onClose(); if (data.capabilities.zhihuData) actions.onLogin(); else actions.onCreate(); }}>{data.capabilities.zhihuData ? '连接知乎账号' : '用兴趣创建画像'}<ArrowRight size={15} /></button> : <button type="submit" className="button primary" disabled={busy || !sources.length}>{busy ? <Spinner text="正在读取并整理…" /> : <><ArrowDownToLine size={16} />{data.profile ? '导入并更新画像' : '导入所选摘要'}{sources.length > 0 && <span>({sources.length})</span>}</>}</button>}</div>
+      <div className="import-footer"><button type="button" className="button secondary" disabled={working} onClick={onClose}>暂不导入</button>{!available ? <button type="button" className="button primary" onClick={() => { onClose(); if (data.capabilities.zhihuData) actions.onLogin(); else actions.onCreate(); }}>{data.capabilities.zhihuData ? '连接知乎账号' : '用兴趣创建画像'}<ArrowRight size={15} /></button> : <button type="submit" className="button primary" disabled={working || !sources.length}>{busy ? <Spinner text="正在读取并整理…" /> : <><ArrowDownToLine size={16} />{data.profile ? '导入并更新画像' : '导入所选摘要'}{sources.length > 0 && <span>({sources.length})</span>}</>}</button>}</div>
     </form>}
+    {data.capabilities.zhihuData && <ZhihuDataCheck key={data.user.id} actions={actions} disabled={busy} onBusyChange={setChecking} onReconnect={() => { onClose(); actions.onLogin(); }}/>}
   </Dialog>;
 }

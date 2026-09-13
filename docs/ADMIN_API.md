@@ -158,6 +158,11 @@ type AdminUserRow = {
     discoverable: boolean;
     updatedAt: string;
   };
+  zhihuValidation: null | {
+    checkedAt: string;
+    status: 'passed' | 'partial' | 'failed';
+    items: { id: string; label: string; status: 'success' | 'empty' | 'error' | 'skipped'; count: number | null; code: string | null; message: string }[];
+  };
   activity: {
     connections: number;
     pendingInvitations: number;
@@ -169,7 +174,7 @@ type AdminUserRow = {
 }
 ```
 
-活动计数中，连接和待处理邀请包含收发双方；消息只统计该用户发送的记录，收藏只统计该用户收藏的记录。导入数据只返回数量及更新时间。
+活动计数中，连接和待处理邀请包含收发双方；消息只统计该用户发送的记录，收藏只统计该用户收藏的记录。导入数据只返回数量及更新时间。`zhihuValidation` 仅为用户主动运行的五项数据检查结果，包含状态、条数和时间，不包含检查读取的内容。未做过检查为 null，后台查看不会代替用户发起检查。
 
 响应使用明确字段白名单，并在 SQL 中仅投影需要的画像字段。不返回 OAuth subject、普通或管理员会话材料、密码或哈希、完整 `input`、画像 `evidence`、原始导入内容、邀请正文或聊天正文。此版本没有删除、修改账号、代登录、导出用户原始数据等管理接口。
 

@@ -1,4 +1,4 @@
-import type { Dimension } from './types';
+import type { Dimension, ZhihuValidationReport } from './types';
 
 export interface AdminSession {
   configured: boolean;
@@ -63,6 +63,7 @@ export interface AdminUsers {
 }
 
 export interface AdminUserDetail {
+  zhihuValidation: ZhihuValidationReport | null;
   user: AdminUserRow;
   profile: null | {
     title: string;

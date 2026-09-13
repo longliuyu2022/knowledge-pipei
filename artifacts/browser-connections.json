@@ -1,87 +1,107 @@
 {
   "suite": "connections",
   "status": "passed",
-  "startedAt": "2026-09-13T03:46:23.061Z",
+  "startedAt": "2026-09-13T04:52:17.837Z",
   "checks": [
     {
-      "label": "两个独立浏览器身份，隔离 SQLite 且模型与知乎外部能力关闭",
+      "label": "三个独立浏览器身份，隔离 SQLite 且模型与知乎外部能力关闭",
       "status": "passed",
-      "elapsedMs": 116
+      "elapsedMs": 132
     },
     {
       "label": "未公开画像互不可见；真实匹配页不混入体验人物",
       "status": "passed",
-      "elapsedMs": 1495
+      "elapsedMs": 1681
     },
     {
       "label": "伙伴明确公开后由 SSE 出现在真实匹配；我的画像仍保持私密",
       "status": "passed",
-      "elapsedMs": 186
+      "elapsedMs": 117
     },
     {
       "label": "真实伙伴详情、规则来源、四项评分与雷达；破冰仅在点击后生成",
       "status": "passed",
-      "elapsedMs": 1274
+      "elapsedMs": 1558
     },
     {
       "label": "明确点击加入匹配并发送邀请才公开本人；收件人实时收到真实邀请",
       "status": "passed",
-      "elapsedMs": 1830
+      "elapsedMs": 1974
     },
     {
       "label": "婉拒邀请后双方待处理列表同步移除，未产生可访问的对话",
       "status": "passed",
-      "elapsedMs": 436
+      "elapsedMs": 378
     },
     {
       "label": "再次邀请并由另一身份接受；双方通过 SSE 获得空白真实会话",
       "status": "passed",
-      "elapsedMs": 1852
+      "elapsedMs": 2114
+    },
+    {
+      "label": "已建立聊天自动展示真实共同兴趣和三条本地话题，无关身份不可读取且不自动请求 AI",
+      "status": "passed",
+      "elapsedMs": 1221
+    },
+    {
+      "label": "点击话题只追加草稿并聚焦，保留原文；达到 2000 字时整条拒绝且不自动发消息",
+      "status": "passed",
+      "elapsedMs": 831
+    },
+    {
+      "label": "话题读取与生成失败不阻塞输入，手动重试才请求更多灵感并保留草稿",
+      "status": "passed",
+      "elapsedMs": 711
+    },
+    {
+      "label": "切换真实会话取消旧灵感请求，空共同兴趣不冒充重合，两段草稿与上下文保持独立",
+      "status": "passed",
+      "elapsedMs": 3323
     },
     {
       "label": "空白消息禁发；双方真实发送与 SSE 同步，Enter 发送及 Shift+Enter 换行",
       "status": "passed",
-      "elapsedMs": 966
+      "elapsedMs": 1374
     },
     {
       "label": "快速连续点击发送只产生一次请求与一条持久化消息",
       "status": "passed",
-      "elapsedMs": 493
+      "elapsedMs": 838
     },
     {
       "label": "模拟消息已落库但响应丢失：保留草稿并以同一 UUID 重试，不重复落库或显示",
       "status": "passed",
-      "elapsedMs": 775
+      "elapsedMs": 1420
     },
     {
       "label": "发送响应延迟时继续编辑，成功后保留新草稿；切换连接标签和刷新列表不丢草稿",
       "status": "passed",
-      "elapsedMs": 833
+      "elapsedMs": 1818
     },
     {
-      "label": "桌面聊天截图，390px 手机无横向溢出且往返对话列表保留草稿",
+      "label": "桌面和 390/320px 聊天话题可折叠，输入框完整可见且往返列表保留草稿",
       "status": "passed",
-      "elapsedMs": 1335
+      "elapsedMs": 3595
     },
     {
       "label": "浏览器整页刷新后已发送消息仍持久化，两方读取相同消息历史",
       "status": "passed",
-      "elapsedMs": 604
+      "elapsedMs": 809
     },
     {
       "label": "超过 100 条真实库消息按 before 分页读取，补齐历史且无重复",
       "status": "passed",
-      "elapsedMs": 797
+      "elapsedMs": 1530
     },
     {
       "label": "屏蔽需明确确认，双方通过 SSE 移除连接并禁止访问原会话、画像和匹配",
       "status": "passed",
-      "elapsedMs": 689
+      "elapsedMs": 919
     },
     {
       "label": "全流程没有浏览器外部网络请求或虚构消息",
       "status": "passed",
-      "elapsedMs": 0
+      "elapsedMs": 1
     },
     {
       "label": "浏览器运行与静态资源无错误",
@@ -92,7 +112,7 @@
   "pageErrors": [],
   "assetErrors": [],
   "configuration": {
-    "identities": 2,
+    "identities": 3,
     "database": "temporary isolated SQLite",
     "ai": false,
     "embedding": false,
@@ -106,8 +126,17 @@
     "olderPage": 10
   },
   "screenshots": [
+    "conversation-starter-desktop.png",
     "connections-desktop.png",
-    "connections-mobile.png"
+    "connections-mobile.png",
+    "connections-mobile-320.png"
   ],
-  "finishedAt": "2026-09-13T03:46:37.562Z"
+  "conversationStarters": {
+    "automaticMode": "rules",
+    "automaticQuestions": 3,
+    "manualRequests": 3,
+    "draftLimit": 2000,
+    "crossConversationCancellation": true
+  },
+  "finishedAt": "2026-09-13T04:52:45.496Z"
 }

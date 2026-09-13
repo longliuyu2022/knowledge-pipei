@@ -64,3 +64,7 @@ node scripts/verify-live.mjs
 - 开启知乎前登记准确回调地址；平台必须可靠回传 state，否则保持拒绝登录。
 - 多实例运行需要将 Token、限流、实时事件和会话迁移至共享存储。
 - 如需下线，仅停止 `soulmatch` 并移除这一条 Caddy import；不修改其他站点配置。
+
+## 本轮功能的轻量公网检查
+
+`node scripts/verify-next-live.mjs` 核对部署产物、真实队列汇总、邀请链接和新接口权限。只创建并清除一个未建立画像的临时访客，不进入队列、不调用真实模型或知乎。报告为 `artifacts/next-public-validation.json`；不能将此检查当作真实 OAuth 数据验收。

@@ -1,7 +1,7 @@
 {
   "origin": "https://zhihupipei.aiimage.icu",
   "status": "passed",
-  "startedAt": "2026-09-13T03:39:30.709Z",
+  "startedAt": "2026-09-13T05:12:47.607Z",
   "checks": [
     {
       "label": "公网后台入口可访问且禁止缓存与搜索索引",
@@ -30,5 +30,5 @@
   ],
   "pageErrors": [],
   "assetErrors": [],
-  "finishedAt": "2026-09-13T03:39:35.524Z"
+  "finishedAt": "2026-09-13T05:12:54.194Z"
 }

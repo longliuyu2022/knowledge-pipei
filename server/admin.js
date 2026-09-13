@@ -310,7 +310,7 @@ export function createAdminRouter(config, { store, pairing, onlineIds = () => ne
     const imports = store.db.prepare(`SELECT CASE WHEN json_valid(data) THEN
       CASE WHEN json_type(data) = 'array' THEN json_array_length(data) ELSE 0 END ELSE 0 END AS count,
       fetched_at AS fetchedAt FROM imports WHERE user_id = ?`).get(id);
-    res.json({ user, profile, activity: { ...activity, importedItems: imports?.count || 0, importedAt: imports?.fetchedAt || null } });
+    res.json({ user, profile, zhihuValidation: store.zhihuValidation(id), activity: { ...activity, importedItems: imports?.count || 0, importedAt: imports?.fetchedAt || null } });
   });
 
   // Always terminate here: unknown admin paths must not reach visitor middleware.

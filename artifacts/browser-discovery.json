@@ -1,65 +1,65 @@
 {
   "suite": "discovery",
   "status": "passed",
-  "startedAt": "2026-09-13T03:45:47.413Z",
+  "startedAt": "2026-09-13T04:35:02.941Z",
   "checks": [
     {
       "label": "桌面首页真实加载八位虚构体验伙伴与画像说明",
       "status": "passed",
-      "elapsedMs": 833
+      "elapsedMs": 2018
     },
     {
       "label": "伙伴关键词和兴趣筛选以及空态可清除",
       "status": "passed",
-      "elapsedMs": 500
+      "elapsedMs": 2815
     },
     {
       "label": "互补视角使用独立评分并能切回推荐",
       "status": "passed",
-      "elapsedMs": 177
+      "elapsedMs": 1715
     },
     {
       "label": "收藏状态、收藏筛选与刷新持久化",
       "status": "passed",
-      "elapsedMs": 476
+      "elapsedMs": 4006
     },
     {
       "label": "详情含真实规则标注、四项评分和虚构人物边界",
       "status": "passed",
-      "elapsedMs": 276
+      "elapsedMs": 1765
     },
     {
       "label": "按需生成三种破冰问题，可复制且不伪造知乎原文",
       "status": "passed",
-      "elapsedMs": 2004
+      "elapsedMs": 6320
     },
     {
       "label": "兴趣星图可筛选、缩放、重置和打开伙伴详情",
       "status": "passed",
-      "elapsedMs": 1558
+      "elapsedMs": 6182
     },
     {
       "label": "真实参与者空池不填入虚构伙伴",
       "status": "passed",
-      "elapsedMs": 381
+      "elapsedMs": 1515
     },
     {
       "label": "390px 手机首页、匹配弹窗和星图无横向溢出",
       "status": "passed",
-      "elapsedMs": 2001
+      "elapsedMs": 8686
     },
     {
       "label": "320px 手机首页、匹配弹窗和星图无横向溢出",
       "status": "passed",
-      "elapsedMs": 1339
+      "elapsedMs": 8157
     },
     {
       "label": "浏览器运行与静态资源无错误",
       "status": "passed",
-      "elapsedMs": 11
+      "elapsedMs": 90
     }
   ],
   "pageErrors": [],
   "assetErrors": [],
-  "finishedAt": "2026-09-13T03:45:58.284Z"
+  "finishedAt": "2026-09-13T04:35:51.097Z"
 }
