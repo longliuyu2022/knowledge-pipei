@@ -1,0 +1,35 @@
+{
+  "suite": "onboarding",
+  "status": "passed",
+  "startedAt": "2026-09-14T09:11:01.133Z",
+  "checks": [
+    {
+      "label": "1440px 新访客先选择接入或填写，取消后仍回到入口",
+      "status": "passed",
+      "elapsedMs": 410
+    },
+    {
+      "label": "1440px 填写确认后自动弹出人格卡，刷新后保留画像",
+      "status": "passed",
+      "elapsedMs": 1898
+    },
+    {
+      "label": "390px 新访客先选择接入或填写，取消后仍回到入口",
+      "status": "passed",
+      "elapsedMs": 289
+    },
+    {
+      "label": "390px 填写确认后自动弹出人格卡，刷新后保留画像",
+      "status": "passed",
+      "elapsedMs": 901
+    },
+    {
+      "label": "浏览器运行与静态资源无错误",
+      "status": "passed",
+      "elapsedMs": 1
+    }
+  ],
+  "pageErrors": [],
+  "assetErrors": [],
+  "finishedAt": "2026-09-14T09:11:04.770Z"
+}

@@ -1,4 +1,5 @@
 import { DOMAINS, TOPICS, TOPIC_MAP, STYLES, GOALS, DEFAULT_INPUT } from '../shared/catalog.js';
+import { personaFor } from '../shared/personas.js';
 
 export function cosine(a, b) {
   if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length || !a.length) return 0;
@@ -39,7 +40,7 @@ export function buildProfile(input, imports = []) {
   const dimensions = DOMAINS.map((domain, axis) => ({ ...domain, value: Math.round(vector[axis] / max * 100) }));
   const topDomains = [...dimensions].sort((a, b) => b.value - a.value);
   const titleMap = { tech: '未来的跨界探索者', humanities: '日常里的深度思考者', arts: '捕捉灵感的观察者', science: '追问万物的好奇家', life: '热爱日常的发现者', growth: '把好奇变成行动的人' };
-  const title = titleMap[topDomains[0].id];
+  const title = personaFor(input)?.name || titleMap[topDomains[0].id];
   const labels = interests.slice(0, 3).map(t => t.label);
   const style = STYLES.find(s => s.id === input.styleId) || STYLES[0];
   return {
