@@ -62,7 +62,7 @@ export function ProfilePage({ actions }: { actions: PageActions }) {
 
   return <div className="profile-page">
     <PageTitle eyebrow="A LITTLE MORE ABOUT YOU" title="我的知识人格" description="把让你停留的内容，连成一幅独特的自己。">
-      <div className="profile-page-actions">{!isSample && <button className="button secondary" onClick={actions.onShare}>分享人格卡</button>}<button className="button secondary" onClick={exportCard} disabled={exporting}>{exporting ? <Spinner text="生成图片…" /> : <><ArrowDownToLine size={16} />{isSample ? '下载示例卡' : '下载人格卡'}</>}</button><button className="button primary" onClick={actions.onCreate}>{isSample ? <Sparkles size={16} /> : <PencilLine size={16} />}{isSample ? '创建我的画像' : '编辑画像'}</button></div>
+      <div className="profile-page-actions"><button className="button primary" onClick={() => actions.navigate('pairing')}>寻找同频伙伴<ArrowRight size={16}/></button>{!isSample && <button className="button secondary" onClick={actions.onShare}>分享人格卡</button>}<button className="button secondary" onClick={actions.onCreate}><PencilLine size={16}/>{isSample ? '创建我的人格' : '编辑人格'}</button></div>
     </PageTitle>
 
     {isSample && <div className="profile-sample-notice"><span><Compass size={18} /></span><div><strong>先看看，一份知识人格是什么模样</strong><p>下面是一份体验示例，不是对你的分析。选择自己的兴趣，就能生成你的专属画像。</p></div><button className="text-button" onClick={actions.onCreate}>从我的兴趣开始<ArrowRight size={15} /></button></div>}
@@ -79,13 +79,13 @@ export function ProfilePage({ actions }: { actions: PageActions }) {
         <div className="profile-highlights">{profile.highlights.map((highlight, index) => <div key={`${index}-${highlight}`}><span>{index === 0 ? <BookOpen size={17} /> : <Sparkles size={17} />}</span><p>{highlight}</p></div>)}</div>
         <p className="profile-caption"><Fingerprint size={13} />兴趣的一个切面，等待你不断写下新的一页</p>
       </section>
-      <section className="panel profile-radar-panel"><div className="section-heading"><h2>知识兴趣雷达</h2><span className="profile-info-icon" title="根据所选兴趣、自述和导入摘要，呈现六个方向的兴趣关联。分值不代表知识水平或能力。"><CircleHelp size={16} aria-label="雷达显示兴趣关联，不代表能力评分" /></span></div><p className="profile-section-description">每一束好奇，都有自己的方向</p><Radar dimensions={profile.dimensions} large /><div className="profile-radar-legend"><span />你的兴趣分布{isSample && <small>· 体验数据</small>}</div><p className="profile-caption">仅呈现兴趣关联，不代表能力评分</p></section>
+
     </div>
 
     {profile.analysis.notice && <p className="profile-analysis-note"><CircleHelp size={15} />{profile.analysis.notice}</p>}
-    <PersonaExplorer key={`${profile.input.personaDrive}-${profile.input.personaConnection}-${isSample}`} profile={profile} sample={isSample} onEdit={actions.onCreate}/>
+    <details className="redesign-details" open={!persona}><summary>了解我的人格 · 优势与成长建议</summary><PersonaExplorer key={`${profile.input.personaDrive}-${profile.input.personaConnection}-${isSample}`} profile={profile} sample={isSample} onEdit={actions.onCreate}/></details>
 
-    <div className="profile-detail-grid">
+    <details className="redesign-details"><summary>兴趣、交流偏好与来源依据</summary>      <section className="panel profile-radar-panel"><div className="section-heading"><h2>知识兴趣雷达</h2><span className="profile-info-icon" title="根据所选兴趣、自述和导入摘要，呈现六个方向的兴趣关联。分值不代表知识水平或能力。"><CircleHelp size={16} aria-label="雷达显示兴趣关联，不代表能力评分" /></span></div><p className="profile-section-description">每一束好奇，都有自己的方向</p><Radar dimensions={profile.dimensions} large /><div className="profile-radar-legend"><span />你的兴趣分布{isSample && <small>· 体验数据</small>}</div><p className="profile-caption">仅呈现兴趣关联，不代表能力评分</p></section><div className="profile-detail-grid">
       <section className="panel profile-interests-panel"><div className="section-heading"><h2>兴趣的线索</h2><span className="profile-count">{profile.interests.length} 个主题</span></div><p className="profile-section-description">从你主动分享的内容中，找到好奇心的落点</p>
         <div className="profile-interest-list">{profile.interests.map(interest => <div className="profile-interest-row" key={interest.id}><div><span>{interest.label}</span><small>{profile.input.topicIds.includes(interest.id) ? '主动选择' : '内容关联'}</small></div><div className="profile-interest-track" aria-hidden="true"><span style={{ width: `${Math.max(8, interest.weight / maxWeight * 100)}%` }} /></div></div>)}</div>
       </section>
@@ -105,6 +105,7 @@ export function ProfilePage({ actions }: { actions: PageActions }) {
 
     {!isSample && <section className="profile-visibility-panel"><span className="profile-visibility-icon">{profile.discoverable ? <Eye size={22} /> : <LockKeyhole size={22} />}</span><div><h3>{profile.discoverable ? '你的知识名片已公开' : '你的知识名片目前仅向已连接伙伴分享'}</h3><p>{profile.discoverable ? '你的昵称、画像、自述、问题与交流偏好对真实参与者可见。关闭后会取消等待中的邀请，已建立的连接保留。' : '加入后，伙伴可查看昵称、兴趣画像、自述、问题与交流偏好。已建立连接的伙伴仍可查看公开资料，原始导入摘要仅自己可见。'}</p></div><button className={`button ${profile.discoverable ? 'secondary' : 'primary'}`} onClick={toggleVisibility} disabled={visibilityBusy}>{visibilityBusy ? <Spinner text="正在保存…" /> : profile.discoverable ? '隐藏公开名片' : '公开知识名片'}</button></section>}
 
+    </details>
     <div className="profile-endnote"><span>{!isSample && profile.updatedAt && !Number.isNaN(Date.parse(profile.updatedAt)) ? `最近更新于 ${formatTime(profile.updatedAt)}` : '每一次新的好奇，都会让这幅画像更丰富'}</span><button className="text-button" onClick={() => actions.navigate('pairing')}>去寻找同频的人<ArrowRight size={15} /></button></div>
   </div>;
 }

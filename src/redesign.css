@@ -1,0 +1,94 @@
+/* Shared visual layer for the Tongzhi blue redesign. */
+:root, .tongzhi-shell {
+  --purple: #056de8; --primary: #0563d6; --accent: #056de8;
+  --soft: #eaf3ff; --ink: #172b4d; --text: #172b4d;
+  --muted: #596579; --border: #dfe5ec; --line: #dfe5ec;
+}
+.tongzhi-shell { background: #f6f8fa; font-size: 17px; line-height: 1.6; }
+.tongzhi-shell .sidebar, .tongzhi-shell .topbar { background: #fff; border-color: var(--border); }
+.tongzhi-shell .main-content { max-width: 1600px; margin-inline: auto; padding: 32px; }
+.tongzhi-shell .nav-item { font-size: 17px; color: var(--muted); }
+.tongzhi-shell .nav-item.active, .tongzhi-shell .nav-item:hover,
+.tongzhi-shell .tz-tabs > button.active, .tongzhi-shell .tz-mode-grid > button.active {
+  color: #0456b8; background: #eaf3ff; border-color: #b6d5fa;
+}
+.tongzhi-shell .tz-brand-mark, .tongzhi-shell .nav-indicator, .tongzhi-shell .nav-badge { background: #056de8; }
+.tongzhi-shell .tz-brand strong, .tongzhi-shell .page-title h1,
+.tongzhi-shell .tz-card h2, .tongzhi-shell .profile-persona h2 { color: var(--ink); }
+.tongzhi-shell .button { font-size: 16px; min-height: 46px; padding: 12px 20px; }
+.tongzhi-shell .button.primary { background: #0563d6; color: #fff; box-shadow: 0 4px 14px #056de81a; }
+.tongzhi-shell .button.primary:hover:not(:disabled) { background: #0456b8; }
+.tongzhi-shell .button.secondary { color: #0456b8; border-color: #c5d9ef; background: #fff; }
+.tongzhi-shell .text-button { color: #0456b8; font-size: 15px; }
+.tongzhi-shell .page-title h1 { font-size: clamp(28px, 3vw, 32px); }
+.tongzhi-shell .page-title > div > p:last-child,
+.tongzhi-shell .tz-muted, .tongzhi-shell .tz-form label,
+.tongzhi-shell .tz-form textarea, .tongzhi-shell .profile-persona-summary,
+.tongzhi-shell .persona-analysis-grid p, .tongzhi-shell .tz-reasons { font-size: 17px; line-height: 1.65; color: var(--muted); }
+.tongzhi-shell .tz-caption, .tongzhi-shell .profile-caption,
+.tongzhi-shell .tz-consent, .tongzhi-shell .tz-mode-grid > button span { font-size: 14px; color: var(--muted); }
+.tongzhi-shell .tag, .tongzhi-shell .tz-tabs > button { font-size: 15px; }
+.tongzhi-shell .tag-purple, .tongzhi-shell .tz-status, .tongzhi-shell .tz-ai-badge { color: #0456b8; background: #eaf3ff; }
+.tongzhi-shell .tz-card, .tongzhi-shell .panel { border-color: var(--border); background: #fff; border-radius: 18px; }
+.tongzhi-shell .tz-card { padding: 28px; }
+.tongzhi-shell .eyebrow, .tongzhi-shell .topbar-greeting,
+.tongzhi-shell .hackathon-badge, .tongzhi-shell .page-footer,
+.tongzhi-shell .profile-highlights, .tongzhi-shell .profile-persona-label,
+.tongzhi-shell .profile-persona .profile-caption,
+.tongzhi-shell .connections-section-intro { display: none; }
+.tongzhi-shell .profile-overview { grid-template-columns: minmax(0, 1fr); }
+.tongzhi-shell .profile-persona { padding: clamp(24px, 4vw, 48px); background: linear-gradient(125deg, #fff 35%, #eaf3ff); }
+.tongzhi-shell .profile-persona h2 { font-size: clamp(32px, 4vw, 44px); margin-block: 24px 14px; }
+.tongzhi-shell .profile-persona .persona-quote { font-size: 21px; color: #0456b8; }
+.tongzhi-shell .profile-persona-summary { max-width: 48em; }
+.tongzhi-shell .profile-persona .tags { margin-block: 16px; }
+.tongzhi-shell .profile-persona:has(.persona-quote) .profile-persona-summary,
+.tongzhi-shell .profile-persona:has(.persona-quote) .tags:has(.profile-persona-tag) { display: none; }
+.redesign-details { margin-block: 20px; border: 1px solid var(--border); border-radius: 14px; background: #fff; padding: 18px 24px; }
+.redesign-details > summary { cursor: pointer; font-size: 17px; font-weight: 600; color: #0456b8; padding: 6px 0; }
+.redesign-details[open] > summary { margin-bottom: 20px; }
+.redesign-details .profile-radar-panel { margin-bottom: 24px; }
+.tongzhi-shell .tz-matching-main { border-top: 4px solid #056de8; }
+.tongzhi-shell .tz-mode-grid > button strong { font-size: 19px; }
+.tongzhi-shell .tz-orbit-mark { background: #eaf3ff; color: #056de8; }
+.tongzhi-shell .tz-proposal-summary, .tongzhi-shell .tz-matching-wait > p { font-size: 17px; }
+.tongzhi-shell .connections-chat-layout.panel { grid-template-columns: minmax(0, 1fr) minmax(0, 3fr); height: max(600px, calc(100dvh - 245px)); }
+.tongzhi-shell .tz-companion-layout { grid-template-columns: minmax(0, 1fr) minmax(0, 3fr); gap: 0; }
+.tongzhi-shell .tz-companion-chat { height: max(650px, calc(100dvh - 190px)); }
+.tongzhi-shell .tz-companion-messages { flex: 1; min-height: 120px; max-height: none; }
+.tongzhi-shell .tz-session-sidebar { max-height: calc(100dvh - 190px); overflow: auto; }
+.tongzhi-shell .conversation-message-content > p, .tongzhi-shell .tz-ai-message > p { font-size: 17px; line-height: 1.65; }
+.tongzhi-shell .conversation-message.is-mine .conversation-message-content > p,
+.tongzhi-shell .tz-ai-message.is-mine > p { background: #eaf3ff; color: #172b4d; border-color: #c5d9ef; }
+.tongzhi-shell .conversation-list-item.active { background: #eaf3ff; }
+.tongzhi-shell .conversation-list-copy strong { font-size: 16px; }
+.tongzhi-shell .conversation-composer textarea, .tongzhi-shell .tz-chat-composer textarea {
+  font-size: 17px; line-height: 1.6; min-height: 90px; max-height: 180px; field-sizing: content;
+}
+.tongzhi-shell .conversation-message-meta, .tongzhi-shell .tz-message-label { font-size: 14px; }
+.tongzhi-shell .mobile-bottom-nav { grid-template-columns: repeat(4, 1fr); }
+.tongzhi-shell .mobile-bottom-nav > a.active { color: #056de8; }
+:focus-visible { outline-color: #056de8; }
+.redesign-ai-back { display: none; }
+.tongzhi-shell .cz-pathway, .tongzhi-shell .cz-eyebrow { display: none; }
+.tongzhi-shell .cz-button { font-size: 16px; }
+.tongzhi-shell .cz-primary { background: #0563d6; color: #fff; }
+.tongzhi-shell .cz-text-button { color: #0456b8; font-size: 15px; }
+.tongzhi-shell .cz-directory-heading h1 { font-size: 32px; }
+.tongzhi-shell .cz-directory-heading p { font-size: 17px; }
+@media (max-width: 760px) {
+  .redesign-ai-back { display: inline-flex; margin-bottom: 12px; }
+  .tongzhi-shell .tz-companion-layout.has-selection .tz-session-sidebar { display: none; }
+  .tongzhi-shell .main-content { padding: 20px 16px 90px; }
+  .tongzhi-shell .profile-page-actions { flex-wrap: wrap; }
+  .tongzhi-shell .profile-page-actions .button { white-space: normal; }
+  .tongzhi-shell .tz-card { padding: 22px 18px; }
+  .tongzhi-shell .tz-page-tabs { flex-wrap: wrap; }
+  .tongzhi-shell .tz-tabs > button { padding: 10px; font-size: 14px; }
+  .tongzhi-shell .connections-chat-layout.panel, .tongzhi-shell .tz-companion-layout { grid-template-columns: minmax(0, 1fr); }
+  .tongzhi-shell .connections-chat-layout.has-selection { height: auto; min-height: 0; bottom: env(safe-area-inset-bottom, 0px); }
+  .tongzhi-shell .tz-session-sidebar { max-height: 220px; }
+  .tongzhi-shell .tz-companion-chat { height: max(600px, calc(100dvh - 150px)); }
+  .tongzhi-shell .mobile-bottom-nav > a { font-size: 14px; }
+  .redesign-details { padding: 14px 16px; }
+}

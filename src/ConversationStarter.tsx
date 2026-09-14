@@ -27,7 +27,7 @@ export function ConversationStarter({ conversationId, refreshKey, onUseQuestion 
   const [inspiration, setInspiration] = useState<Icebreakers | null>(null);
   const [generating, setGenerating] = useState(false);
   const [generationError, setGenerationError] = useState('');
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const [notice, setNotice] = useState('');
   const [noticeError, setNoticeError] = useState(false);
   const [consentBusy, setConsentBusy] = useState(false);

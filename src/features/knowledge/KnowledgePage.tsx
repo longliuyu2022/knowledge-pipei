@@ -23,7 +23,7 @@ const sourceLabels: Record<SourceType, string> = { conversation: '伙伴私聊',
 const uniqueMessages = (first: OwnMessage[], second: OwnMessage[]) => [...new Map([...first, ...second].map(message => [message.id, message])).values()].sort((a, b) => a.createdAt.localeCompare(b.createdAt));
 
 export function KnowledgePage({ actions, version, onNavigate }: { actions: PageActions; version: number; onNavigate: (page: string) => void }) {
-  const [tab, setTab] = useState<'report' | 'portrait' | 'suggestions'>('report');
+  const [tab, setTab] = useState<'report' | 'portrait' | 'suggestions'>('portrait');
   const [data, setData] = useState<ReportState | null>(null), [error, setError] = useState(''), [reload, setReload] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
@@ -38,7 +38,7 @@ export function KnowledgePage({ actions, version, onNavigate }: { actions: PageA
       const evidence = (actions.data.profile?.evidence || []).filter(item => section.evidenceIds.includes(item.id));
       return <article className="tz-card tz-report-section" key={section.id}><h2>{section.title}</h2><p>{section.text}</p>{evidence.length > 0 && <details className="tz-evidence"><summary><ChevronDown size={14}/>查看依据 · {evidence.length} 条材料</summary>{evidence.map(item => <blockquote key={item.id}><strong>{item.label}</strong><p>{item.text}</p></blockquote>)}</details>}</article>;
     })}</section><aside className="tz-stack"><section className="tz-card"><h2><Lightbulb size={19}/>当前兴趣线索</h2><p className="tz-muted">反映这批材料的主题，不是能力分数。</p><div className="tz-interest-bars">{report.interests.map(interest => <div key={interest.id}><span>{interest.label}</span><div><i style={{ width: `${Math.max(4, Math.min(100, interest.weight <= 1 ? interest.weight * 100 : interest.weight))}%` }}/></div></div>)}</div><button className="text-button tz-top-gap" onClick={actions.onImport}>从知乎选择材料<ArrowUpRight size={14}/></button></section><section className="tz-card"><h2><History size={18}/>成长记录</h2>{data.history.length ? <ol className="tz-history">{data.history.slice(0, 8).map(item => <li key={item.revision}><span>{item.title}</span><small>{formatTime(item.createdAt)} · 第 {item.revision} 次记录</small></li>)}</ol> : <p className="tz-muted">确认新的知识后，这里会留下画像更新记录。</p>}<button className="text-button tz-top-gap" onClick={() => setTab('suggestions')}>整理我的发言<ArrowUpRight size={14}/></button></section></aside></div> : !error && <section className="tz-card"><Empty title="你的知识画像，从真实的材料开始" text="选择兴趣、写下正在想的问题，或连接知乎后选择自己的内容。材料不足时，我们会如实说明。" action="创建知识画像" onAction={actions.onCreate}/><div className="tz-empty-actions"><button className="text-button" onClick={actions.onImport}>从知乎导入内容<ArrowUpRight size={14}/></button><button className="text-button" onClick={() => onNavigate('discover')}>先参加一个问题讨论<ArrowUpRight size={14}/></button></div></section>}</>}
-    {tab === 'portrait' && (actions.data.profile ? <ProfilePage actions={actions}/> : <section className="tz-card"><Empty title="先留下自己的兴趣与问题" text="你确认后才会生成个人画像与分享卡。" action="创建知识画像" onAction={actions.onCreate}/></section>)}
+    {tab === 'portrait' && (actions.data.profile ? <ProfilePage actions={actions}/> : <section className="tz-card"><Empty title="认识自己，遇见同频的人" text="选择兴趣与交流方式，生成你的知识人格。" action="手动创建人格" onAction={actions.onCreate}/><div className="tz-empty-actions"><button className="button secondary" onClick={actions.onImport}>从知乎导入</button></div></section>)}
     {tab === 'suggestions' && <SuggestionsPanel actions={actions} version={version} onNavigate={onNavigate}/>}
   </div>;
 }

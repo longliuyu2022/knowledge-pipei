@@ -37,6 +37,7 @@ export function CircleDirectory({ view, version, onNavigate, onProfile, notify }
   const visible = sort === 'recommended' && view === 'discover' ? [...circles].sort((left, right) => (recommendedOrder.get(left.id) ?? 100000) - (recommendedOrder.get(right.id) ?? 100000)) : circles;
   const mine = view === 'mine';
   return <>
+    <div className="tz-tabs tz-page-tabs" aria-label="问题小组视图"><button className={!mine ? 'active' : ''} aria-pressed={!mine} onClick={() => onNavigate('discover')}>发现小组</button><button className={mine ? 'active' : ''} aria-pressed={mine} onClick={() => onNavigate('my-circles')}>我的同题</button></div>
     <header className="cz-directory-heading"><div><span className="cz-eyebrow">{mine ? 'MY CIRCLES · 我的参与' : 'QUESTION CIRCLES · 问题小组'}</span><h1>{mine ? '把共同关心的问题，继续聊下去。' : <>一个好问题，<br className="cz-desktop-break"/>值得一起找到答案。</>}</h1><p>{mine ? '查看参与中的小组、未读讨论和每一轮积累下来的成果。' : '带着问题相遇，用经验与资料推进讨论，留下一份能带走的成果。'}</p></div><button className="cz-button cz-primary" onClick={() => setCreating(true)}><Plus size={17}/>发起问题小组</button></header>
     {!mine && <div className="cz-pathway" aria-label="问题小组如何运作"><div><span>01</span><p><strong>一个具体问题</strong><small>找到共同关心的方向</small></p></div><ArrowRight size={16}/><div><span>02</span><p><strong>一轮共同讨论</strong><small>补充经验、资料和不同观点</small></p></div><ArrowRight size={16}/><div><span>03</span><p><strong>一份共同成果</strong><small>整理依据，署名核对</small></p></div></div>}
     <div className="cz-directory-layout"><section className="cz-directory-main" aria-label={mine ? '我的问题小组' : '发现问题小组'}>

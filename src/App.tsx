@@ -19,11 +19,10 @@ type ShellPage = 'discover' | 'my-circles' | 'matching' | 'profile' | 'connectio
 interface Route { page: ShellPage; circleId?: string; conversationId?: string }
 type Modal = 'wizard' | 'login' | 'import' | 'settings' | 'share' | null;
 const navigation = [
-  { id: 'discover' as const, label: '发现问题', icon: Compass },
-  { id: 'my-circles' as const, label: '我的同题', icon: UsersRound },
-  { id: 'matching' as const, label: '同频伙伴', icon: Sparkles },
   { id: 'profile' as const, label: '知识人格', icon: BookOpen },
+  { id: 'matching' as const, label: '同频匹配', icon: Sparkles },
   { id: 'connections' as const, label: '消息', icon: MessagesSquare },
+  { id: 'discover' as const, label: '问题小组', icon: Compass },
 ];
 const aliases: Record<string, ShellPage> = { discover: 'discover', circles: 'discover', 'my-circles': 'my-circles', matching: 'matching', pairing: 'matching', profile: 'profile', graph: 'profile', knowledge: 'profile', connections: 'connections', notifications: 'notifications', account: 'account', companion: 'companion' };
 const safeId = (value: string | undefined | null) => value && /^[a-zA-Z0-9_-]{1,160}$/.test(value) ? value : undefined;
@@ -32,7 +31,7 @@ function parseRoute(value = location.hash): Route {
   const [path, query = ''] = local.split('?'), [name, rawId] = path.split('/');
   let id: string | undefined;
   try { id = safeId(rawId ? decodeURIComponent(rawId) : undefined); } catch { id = undefined; }
-  const page = aliases[name] || 'discover';
+  const page = aliases[name] || 'profile';
   if (name === 'circles' && id) return { page: 'discover', circleId: id };
   if (page === 'connections') return { page, conversationId: id || safeId(new URLSearchParams(query).get('conversation')) };
   return { page };
@@ -149,14 +148,14 @@ export default function App() {
   }
   if (!data) return <div className="boot-screen tz-boot"><TongzhiBrand/><div>{bootError ? <Empty title="暂时没有连接上" text={bootError} action="重新连接" onAction={() => { setBootError(''); void refresh().catch(error => setBootError(messageOf(error))); }}/> : <Spinner text="正在打开同知…"/>}</div></div>;
   const actions: PageActions = { data, refresh, notify, onCreate: () => open('wizard'), onShare: () => open('share'), onLogin: () => open('login'), onImport: () => open(data.zhihuConnected ? 'import' : 'login'), onSelect: match => { setModal(null); setSelected(match); }, onSave, navigate };
-  const activePage = route.page === 'notifications' ? 'connections' : route.page;
+  const activePage = route.page === 'notifications' ? 'connections' : route.page === 'my-circles' ? 'discover' : route.page;
   const currentNavigation = navigation.find(item => item.id === activePage) || (route.page === 'account' ? { label: '账号与偏好', icon: UserRound } : { label: 'AI 陪伴', icon: Bot });
   const messageCount = unread + data.incomingCount;
   const reset = async () => { setSelected(null); setModal(null); setConversationToOpen(null); await refresh(); navigate('discover'); };
   return <div className="app-shell tongzhi-shell" data-testid="tongzhi-app">
     <a href="#main-content" className="tz-skip-link" onClick={event => { event.preventDefault(); document.getElementById('main-content')?.focus(); }}>跳到主要内容</a>
     {mobileMenu && <button className="sidebar-scrim" aria-label="关闭导航" onClick={() => setMobileMenu(false)}/>}
-    <aside className={`sidebar ${mobileMenu ? 'sidebar-open' : ''}`}><a href="#discover" className="brand-link" aria-label="同知首页" onClick={() => setMobileMenu(false)}><TongzhiBrand/></a><div className="sidebar-section-label">问题，是相遇的开始</div>
+    <aside className={`sidebar ${mobileMenu ? 'sidebar-open' : ''}`}><a href="#profile" className="brand-link" aria-label="同知首页" onClick={() => setMobileMenu(false)}><TongzhiBrand/></a><div className="sidebar-section-label">问题，是相遇的开始</div>
       <nav aria-label="主导航">{navigation.map(item => <a key={item.id} href={`#${item.id}`} className={`nav-item ${activePage === item.id ? 'active' : ''}`} aria-current={activePage === item.id ? 'page' : undefined} onClick={() => setMobileMenu(false)}><item.icon size={19}/><span>{item.label}</span>{item.id === 'connections' && messageCount > 0 && <span className="nav-badge">{messageCount > 99 ? '99+' : messageCount}</span>}{activePage === item.id && <span className="nav-indicator"/>}</a>)}</nav>
       <div className="tz-sidebar-note"><CircleHelp size={25}/><p>带着问题来，<br/>带着新的理解走。</p><span>同题讨论 · 知识成长<br/>与愿意深聊的人相遇</span></div>
       <div className="sidebar-bottom"><a href="#companion" className={`nav-item ${route.page === 'companion' ? 'active' : ''}`} onClick={() => setMobileMenu(false)}><Bot size={18}/><span>AI 陪伴</span><span className="tz-mini-ai">AI</span></a><button className="nav-item privacy-nav" onClick={() => open('settings')}><ShieldCheck size={18}/><span>数据与隐私</span></button><a href="#account" className="sidebar-user" onClick={() => setMobileMenu(false)}><Avatar name={data.profile?.input.name || data.user.name} seed={data.user.id} src={data.user.avatar} size={36}/><div><strong>{data.profile?.input.name || data.user.name}</strong><span>{data.zhihuConnected ? '知乎已连接' : data.user.provider === 'email' ? '邮箱账号' : '账号与偏好'}</span></div><ChevronRight size={16}/></a></div>
