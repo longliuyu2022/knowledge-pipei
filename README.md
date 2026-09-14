@@ -38,7 +38,7 @@ npm run build
 npm start
 ```
 
-模型使用兼容 Chat Completions 的服务端配置。当前线上沿用 `https://metapi.lilililwan.xyz/v1` 与 `deepseek-v4-flash`。App Key、Access Secret、模型密钥和管理员密码哈希均通过服务器私有文件及 systemd Credentials 提供，不写入浏览器、Git 或部署文档。
+模型使用兼容 Chat Completions 的服务端配置。当前线上使用 `https://metapi.lilililwan.xyz/v1` 的 `DeepSeek-V4-Flash-0731`。App Key、Access Secret、模型密钥和管理员密码哈希均通过服务器私有文件及 systemd Credentials 提供，不写入浏览器、Git 或部署文档。
 
 知乎 App ID 为 `400`，用户已确认登记回调 `https://zhihu.aiimage.icu/auth/callback`。新域名授权入口、状态校验和回调自动化检查通过；最后的真实授权确认需开发者本人完成，见 [验证记录](docs/VALIDATION.md)。
 

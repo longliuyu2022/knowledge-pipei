@@ -55,10 +55,11 @@
 .tongzhi-shell .tz-orbit-mark { background: #eaf3ff; color: #056de8; }
 .tongzhi-shell .tz-proposal-summary, .tongzhi-shell .tz-matching-wait > p { font-size: 17px; }
 .tongzhi-shell .connections-chat-layout.panel { grid-template-columns: minmax(0, 1fr) minmax(0, 3fr); height: max(600px, calc(100dvh - 245px)); }
-.tongzhi-shell .tz-companion-layout { grid-template-columns: minmax(0, 1fr) minmax(0, 3fr); gap: 0; }
-.tongzhi-shell .tz-companion-chat { height: max(650px, calc(100dvh - 190px)); }
+.tongzhi-shell .tz-feature:has(.tz-companion-layout) > .page-title { margin-bottom: 14px; }
+.tongzhi-shell .tz-companion-layout { grid-template-columns: minmax(180px, 1fr) minmax(0, 4fr); gap: 0; }
+.tongzhi-shell .tz-companion-chat { height: max(700px, calc(100dvh - 155px)); }
 .tongzhi-shell .tz-companion-messages { flex: 1; min-height: 120px; max-height: none; }
-.tongzhi-shell .tz-session-sidebar { max-height: calc(100dvh - 190px); overflow: auto; }
+.tongzhi-shell .tz-session-sidebar { max-height: calc(100dvh - 155px); overflow: auto; }
 .tongzhi-shell .conversation-message-content > p, .tongzhi-shell .tz-ai-message > p { font-size: 18px; line-height: 1.65; }
 .tongzhi-shell .conversation-message.is-mine .conversation-message-content > p,
 .tongzhi-shell .tz-ai-message.is-mine > p { background: #eaf3ff; color: #172b4d; border-color: #c5d9ef; }
