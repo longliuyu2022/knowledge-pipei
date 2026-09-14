@@ -8,7 +8,7 @@
 
 用户已明确选择接入知乎登录。现有完整应用继续开发；官方生成器需要空目录，因此在服务器 `/root/.local/share/tongpin/zhihu-oauth-init` 生成独立 OAuth 参考项目并完成官方流程，再把公共配置与凭证管理接入本项目。
 
-- 官方 `init_project.mjs` 生成 OAuth 参考项目，App ID `400`，回调为 `https://zhihupipei.aiimage.icu/auth/callback`。
+- 官方 `init_project.mjs` 生成 OAuth 参考项目，App ID `400`，当前回调为 `https://zhihubisai.aiimage.icu/auth/callback`。
 - `doctor.mjs` 检查通过：所需文件齐全、没有明文密钥配置、CLI 可用、两类部署凭证均配置。
 - 参考项目 `npm test` 的两项测试与 `npm run check` 通过。
 - 实际运行参考项目，`/api/health` 正常，`/api/oauth/status` 显示已配置、尚未完成个人授权，随后停止参考服务。
@@ -33,7 +33,7 @@
 平台登记与应用配置必须使用同一个地址：
 
 ```text
-https://zhihupipei.aiimage.icu/auth/callback
+https://zhihubisai.aiimage.icu/auth/callback
 ```
 
 该入口将参数交给既有 `/api/auth/zhihu/callback` 处理，后者绑定当前浏览器、当前会话、一次性 state 和十分钟时限。`authorization_code` 与 `code` 均兼容。认证码和 Token 不写入日志或验证报告。

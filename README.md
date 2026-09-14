@@ -75,7 +75,7 @@ SOUL_AI_JSON_MODE=true
 已安装用户指定的官方 `zhihu-hackathon` Skill 及随包 `zhihu` Skill，官方初始化、CLI 验证与最小本人内容读取已通过。当前作品的 App ID 为 `400`，公开配置位于 `hackathon.config.json`。App Key 和 Access Secret 通过服务器的 systemd Credentials 注入，不放进 `.env`、源码、构建产物或 Git。
 
 ```text
-登记回调：https://zhihupipei.aiimage.icu/auth/callback
+登记回调：https://zhihubisai.aiimage.icu/auth/callback
 部署凭证模板：deploy/zhihu-credentials.conf.example
 ```
 

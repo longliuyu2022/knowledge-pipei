@@ -7,6 +7,6 @@
   "oauth": {
     "enabled": true,
     "appId": "400",
-    "redirectUri": "https://zhihupipei.aiimage.icu/auth/callback"
+    "redirectUri": "https://zhihubisai.aiimage.icu/auth/callback"
   }
 }

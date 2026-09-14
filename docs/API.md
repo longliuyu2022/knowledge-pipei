@@ -119,7 +119,7 @@ Node.js 22.13+、Express 5、SQLite。生产环境由同一个服务提供前端
 
 OAuth state 十分钟有效且只能使用一次。`/access_token` 使用表单交换，`/user` 仅发送用户 OAuth Bearer Token；创作摘要、关注及收藏列表同时发送应用 Access Secret、用户 `X-OAuth-Token` 和秒级时间戳。大整数 uid 从 JSON 解析开始无损保留，未获取有效身份时不创建登录身份。
 
-赛事登记可使用 `https://zhihupipei.aiimage.icu/auth/callback`。公开入口不交换 Token、不放宽 state 校验、不记录 Query，只作不可缓存的本站跳转；浏览器到达 `/api/auth/zhihu/callback` 后仍需原会话、一次性 state 和 `/api/auth/zhihu` 路径下的 OAuth Cookie。缺失或不匹配继续返回 `state_error`。
+赛事登记使用 `https://zhihubisai.aiimage.icu/auth/callback`。公开入口不交换 Token、不放宽 state 校验、不记录 Query，只作不可缓存的本站跳转；浏览器到达 `/api/auth/zhihu/callback` 后仍需原会话、一次性 state 和 `/api/auth/zhihu` 路径下的 OAuth Cookie。缺失或不匹配继续返回 `state_error`。
 
 OAuth Token 保存在服务端内存中，进程重启后需重新连接；不会下发到前端。Token 过期或鉴权错误时停止数据读取，保留已有应用身份，不退回应用开发者本人数据。请求频率或配额错误不撤销用户身份。搜索引用仅使用知乎返回的标题、摘要和官方 HTTPS 链接，不将摘要当全文。
 
