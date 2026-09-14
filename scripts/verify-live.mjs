@@ -7,7 +7,7 @@ import { chromium } from 'playwright';
 // Uses one private, synthetic account and at most three text-model requests.
 // Never writes a browser storage state, credentials, or raw API bodies.
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const origin = new URL(process.env.SOUL_VERIFY_ORIGIN || 'https://zhihupipei.aiimage.icu').origin;
+const origin = new URL(process.env.SOUL_VERIFY_ORIGIN || 'https://zhihubisai.aiimage.icu').origin;
 assert.equal(new URL(origin).protocol, 'https:', 'Public verification requires HTTPS.');
 const artifacts = resolve(root, 'artifacts');
 mkdirSync(artifacts, { recursive: true });

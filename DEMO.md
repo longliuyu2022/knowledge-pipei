@@ -1,6 +1,6 @@
 # 三分钟演示
 
-打开 https://zhihupipei.aiimage.icu。
+打开 https://zhihubisai.aiimage.icu。
 
 ## 0:00–0:30 · 看见一次相遇
 

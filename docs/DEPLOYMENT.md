@@ -1,6 +1,6 @@
 # 部署与维护
 
-当前目标站点：`https://zhihupipei.aiimage.icu`。
+当前目标站点：`https://zhihubisai.aiimage.icu`。旧域名 `zhihupipei.aiimage.icu` 保留为兼容入口并重定向到新域名。
 
 ## 运行结构
 
@@ -37,7 +37,7 @@ systemctl enable --now soulmatch.service
 ```bash
 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
 systemctl reload caddy
-curl --fail https://zhihupipei.aiimage.icu/api/health
+curl --fail https://zhihubisai.aiimage.icu/api/health
 ```
 
 更新时先完成测试和构建，再重启应用。变更配置后也需要重启：

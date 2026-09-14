@@ -1,6 +1,6 @@
 # 管理后台
 
-入口：**https://zhihupipei.aiimage.icu/admin**。使用独立的管理员账号登录；生产用户名为 `admin`，初始随机密码单独交付给站点负责人，不保存在仓库或构建产物中。
+入口：**https://zhihubisai.aiimage.icu/admin**。使用独立的管理员账号登录；生产用户名为 `admin`，初始随机密码单独交付给站点负责人，不保存在仓库或构建产物中。
 
 ## 查看用户与画像
 

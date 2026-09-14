@@ -5,7 +5,7 @@ import { chromium } from 'playwright';
 
 // Reads the owner's separately delivered credential. Never saves user data,
 // screenshots of real users, browser storage, or authentication values.
-const origin = 'https://zhihupipei.aiimage.icu';
+const origin = 'https://zhihubisai.aiimage.icu';
 const credentialFile = process.env.TONGPIN_ADMIN_CREDENTIAL_FILE || '/root/.local/share/tongpin/admin-access.json';
 const credential = JSON.parse(readFileSync(credentialFile, 'utf8'));
 assert.equal(typeof credential.username, 'string');

@@ -4,7 +4,7 @@
 
 知乎黑客松 2026「灵魂匹配局」参赛作品，对应方案二。
 
-- 在线体验：**https://zhihupipei.aiimage.icu**
+- 在线体验：**https://zhihubisai.aiimage.icu**
 - 产品说明：[docs/PRODUCT.md](docs/PRODUCT.md)
 - 演示流程：[DEMO.md](DEMO.md) · [真人试用安排](docs/TRIAL_GUIDE.md)
 - 接口与验证：[API](docs/API.md) · [验证记录](docs/VALIDATION.md)
@@ -102,7 +102,7 @@ npm run test:browser
 
 ## 技术与部署
 
-站点负责人可在 [管理后台](https://zhihupipei.aiimage.icu/admin) 使用独立账号查看用户、兴趣画像及运营概况。支持搜索、筛选、分页和六维画像详情，知乎用户与访客分别统计。管理员密码通过服务器凭证文件配置；使用方式见 [后台说明](docs/ADMIN.md)。
+站点负责人可在 [管理后台](https://zhihubisai.aiimage.icu/admin) 使用独立账号查看用户、兴趣画像及运营概况。支持搜索、筛选、分页和六维画像详情，知乎用户与访客分别统计。管理员密码通过服务器凭证文件配置；使用方式见 [后台说明](docs/ADMIN.md)。
 
 React 19 + TypeScript + Vite，原生 CSS，D3 Force + SVG 图谱；Express 5 + Node.js SQLite + SSE。单机参赛部署直接使用 SQLite，便于完整复现和持久化。模型适配支持 OpenAI 兼容接口与 Anthropic Messages 协议。
 

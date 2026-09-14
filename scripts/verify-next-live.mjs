@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { chromium } from 'playwright';
 
-const origin = 'https://zhihupipei.aiimage.icu';
+const origin = 'https://zhihubisai.aiimage.icu';
 const report = { origin, startedAt: new Date().toISOString(), status: 'running', checks: [], pageErrors: [], assetErrors: [], cleanup: 'pending' };
 const save = () => writeFileSync('artifacts/next-public-validation.json', JSON.stringify(report, null, 2) + '\n');
 const executablePath = process.env.CHROMIUM_PATH || ['/usr/local/bin/chromium-browser', '/usr/bin/chromium'].find(existsSync);
