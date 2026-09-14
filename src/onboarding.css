@@ -1,0 +1,13 @@
+.onboarding-shell { min-height: 100dvh; background: radial-gradient(ellipse at 20% 15%, #ede8ff 0, transparent 50%), radial-gradient(ellipse at 85% 85%, #e6f2ec 0, transparent 45%), #faf9f6; }
+.onboarding-page { min-height: 100dvh; padding: 36px 6vw; display: flex; flex-direction: column; align-items: center; }
+.onboarding-page > :first-child { align-self: flex-start; }
+.onboarding-card { width: min(100%, 580px); margin: auto; padding: 42px 24px; text-align: center; }
+.onboarding-symbol { width: 84px; height: 84px; display: inline-flex; align-items: center; justify-content: center; border-radius: 26px; color: #766294; background: #eee8f7; margin-bottom: 26px; }
+.onboarding-card h1 { font-size: clamp(32px, 5vw, 48px); line-height: 1.35; letter-spacing: -1.5px; margin: 16px 0; }
+.onboarding-description { color: #77747e; line-height: 1.9; font-size: 15px; }
+.onboarding-actions { display: grid; gap: 12px; max-width: 360px; margin: 32px auto 22px; }
+.onboarding-actions .button { min-height: 52px; justify-content: center; }
+.onboarding-next, .onboarding-privacy { display: flex; align-items: center; justify-content: center; gap: 7px; line-height: 1.7; font-size: 13px; color: #80718e; }
+.onboarding-privacy { margin-top: 34px; color: #929098; font-size: 12px; }
+.onboarding-privacy svg { flex-shrink: 0; }
+@media (max-width: 600px) { .onboarding-page { padding: 24px 20px; } .onboarding-card { padding: 32px 0; } }

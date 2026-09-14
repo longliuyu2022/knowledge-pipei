@@ -56,6 +56,34 @@ async function closeDialog(dialog) {
   await dialog.waitFor({ state: 'hidden' });
 }
 
+async function checkShareDialog(page) {
+  const dialog = page.getByRole('dialog', { name: '我的人格卡片', exact: true });
+  await dialog.waitFor();
+  await dialog.locator('.persona-share-image').waitFor();
+  for (const name of ['保存图片', '复制文案', '微信 / 朋友圈', '知乎 / 小红书', '更多分享']) {
+    assert.equal(await dialog.getByRole('button', { name, exact: true }).isEnabled(), true);
+  }
+  assert.equal(await dialog.locator('.persona-options').count(), 0);
+  await assertNoHorizontalOverflow(page, '人格分享弹窗');
+  const [download] = await Promise.all([page.waitForEvent('download'), dialog.getByRole('button', { name: '微信 / 朋友圈', exact: true }).click()]);
+  assert.equal(await download.failure(), null);
+  assert.match(await dialog.getByRole('status').innerText(), /请打开微信/);
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: async value => { window.__shareCopy = value; } } });
+    Object.defineProperty(navigator, 'share', { configurable: true, value: async value => { window.__sharePayload = { text: value.text, count: value.files?.length || 0 }; } });
+    Object.defineProperty(navigator, 'canShare', { configurable: true, value: () => true });
+  });
+  await dialog.getByRole('button', { name: '复制文案', exact: true }).click();
+  assert.match(await page.evaluate(() => window.__shareCopy), /我的知识人格是/);
+  await dialog.getByRole('button', { name: '更多分享', exact: true }).click();
+  await dialog.getByText('已完成系统分享操作。', { exact: true }).waitFor();
+  assert.equal(await page.evaluate(() => window.__sharePayload.count), 1);
+  await page.evaluate(() => { Object.defineProperty(navigator, 'share', { configurable: true, value: undefined }); });
+  await dialog.getByRole('button', { name: '更多分享', exact: true }).click();
+  await dialog.getByText('当前浏览器不支持系统分享，可保存图片或复制文案后分享。', { exact: true }).waitFor();
+  await closeDialog(dialog);
+}
+
 function assertNoSensitiveKeys(value, trail = '') {
   if (!value || typeof value !== 'object') return;
   for (const [key, child] of Object.entries(value)) {
@@ -108,12 +136,14 @@ await runBrowserSuite('profile', async ({ newContext, origin, check, artifactsDi
   });
 
   await check('交流目标、文本与昵称经三步向导真实保存，规则生成正常', async () => {
-    const wizard = page.getByRole('dialog');
+    const wizard = page.getByRole('dialog', { name: '认识你，从好奇心开始', exact: true });
     const next = wizard.getByRole('button', { name: '继续', exact: true });
     await wizard.getByRole('checkbox', { name: '深度交流', exact: true }).uncheck();
     assert.equal(await next.isDisabled(), true, '至少需要一种交流期待');
     for (const label of ['深度交流', '共同学习', '合作创造']) await wizard.getByRole('checkbox', { name: label, exact: true }).check();
     await wizard.getByRole('radio', { name: /从例子出发，边做边聊/ }).check();
+    await wizard.getByRole('radio', { name: /共情.*理解人与感受/ }).check();
+    await wizard.getByRole('radio', { name: /深度交流.*在认真来回的对话里靠近/ }).check();
     const about = wizard.getByRole('textbox', { name: /^关于你/ });
     const questionField = wizard.getByRole('textbox', { name: /^一个你想和别人聊的问题/ });
     assert.equal(await about.getAttribute('maxlength'), '360');
@@ -132,6 +162,7 @@ await runBrowserSuite('profile', async ({ newContext, origin, check, artifactsDi
     const response = await waitForMutation(page, '/profile', () => generate.click());
     assert.equal(response.profile.analysis.mode, 'rules');
     await wizard.waitFor({ state: 'hidden' });
+    await checkShareDialog(page);
     await page.getByRole('button', { name: '编辑画像', exact: true }).waitFor();
     created = await bootstrap(page);
     assert.equal(created.user.id, initial.user.id);
@@ -142,6 +173,9 @@ await runBrowserSuite('profile', async ({ newContext, origin, check, artifactsDi
     assert.deepEqual(new Set(created.profile.input.topicIds), new Set(['ai', 'reading', 'psychology']));
     assert.deepEqual(new Set(created.profile.input.goals), new Set(['conversation', 'learning', 'building']));
     assert.equal(created.profile.input.styleId, 'hands-on');
+    assert.equal(created.profile.input.personaDrive, 'empathy');
+    assert.equal(created.profile.input.personaConnection, 'duo');
+    assert.equal(created.profile.title, '深夜接话人');
     assert.equal(created.profile.revision, 1);
   });
 
@@ -157,6 +191,15 @@ await runBrowserSuite('profile', async ({ newContext, origin, check, artifactsDi
     await page.getByText(initialAbout, { exact: true }).waitFor();
     assert.ok(await page.locator('.profile-evidence-item').count() >= 5);
     await page.getByRole('button', { name: '收起依据', exact: true }).click();
+  });
+
+  await check('个人认识只显示自己的类型，分享弹窗可再次打开', async () => {
+    assert.equal(await page.locator('.persona-options button').count(), 0);
+    assert.match(await page.locator('#persona-reading').innerText(), /我的人格解读/);
+    assert.equal(await page.locator('.persona-analysis-grid article').count(), 6);
+    assert.equal(await page.getByText('人间观察员', { exact: true }).count(), 0);
+    await page.getByRole('button', { name: '分享人格卡', exact: true }).click();
+    await checkShareDialog(page);
   });
 
   await check('可在资料页显式加入匹配，并在设置中撤回', async () => {
@@ -188,6 +231,10 @@ await runBrowserSuite('profile', async ({ newContext, origin, check, artifactsDi
     assert.equal(await about.inputValue(), initialAbout);
     assert.equal(await wizard.getByRole('textbox', { name: /^一个你想和别人聊的问题/ }).inputValue(), question);
     assert.equal(await wizard.getByRole('radio', { name: /从例子出发，边做边聊/ }).isChecked(), true);
+    assert.equal(await wizard.getByRole('radio', { name: /共情.*理解人与感受/ }).isChecked(), true);
+    assert.equal(await wizard.getByRole('radio', { name: /深度交流.*在认真来回的对话里靠近/ }).isChecked(), true);
+    await wizard.getByRole('radio', { name: /创造.*把想法变成现实/ }).check();
+    await wizard.getByRole('radio', { name: /独立沉淀.*先自己想一想，再分享发现/ }).check();
     await about.fill(updatedAbout);
     await wizard.getByRole('button', { name: '继续', exact: true }).click();
     assert.equal(await wizard.getByRole('textbox', { name: /^你的昵称/ }).inputValue(), initialName);
@@ -197,10 +244,12 @@ await runBrowserSuite('profile', async ({ newContext, origin, check, artifactsDi
     assert.equal(response.profile.discoverable, false);
     assert.equal(response.profile.revision, created.profile.revision + 1);
     await wizard.waitFor({ state: 'hidden' });
+    await checkShareDialog(page);
     await page.locator('.profile-persona-user strong').filter({ hasText: updatedName }).waitFor();
     updated = await bootstrap(page);
     assert.equal(updated.profile.input.about, updatedAbout);
     assert.equal(updated.profile.input.name, updatedName);
+    assert.equal(updated.profile.title, '平行宇宙设计师');
     assert.ok(updated.profile.input.topicIds.includes('space'));
     assert.equal(updated.profile.discoverable, false);
   });
@@ -284,7 +333,7 @@ await runBrowserSuite('profile', async ({ newContext, origin, check, artifactsDi
         await mobilePage.getByRole('button', { name: '创建我的画像', exact: true }).waitFor();
         await assertNoHorizontalOverflow(mobilePage, `${width}px 示例页`);
         await mobilePage.getByRole('button', { name: '创建我的画像', exact: true }).click();
-        const wizard = mobilePage.getByRole('dialog');
+        const wizard = mobilePage.getByRole('dialog', { name: '认识你，从好奇心开始', exact: true });
         for (const label of ['人工智能', '摄影', '自然与户外']) await wizard.getByRole('button', { name: label, exact: true }).click();
         await assertNoHorizontalOverflow(mobilePage, `${width}px 兴趣步骤`);
         if (width === 390) {
@@ -301,6 +350,7 @@ await runBrowserSuite('profile', async ({ newContext, origin, check, artifactsDi
         await assertNoHorizontalOverflow(mobilePage, `${width}px 保存步骤`);
         await waitForMutation(mobilePage, '/profile', () => wizard.getByRole('button', { name: '生成我的知识人格', exact: true }).click());
         await wizard.waitFor({ state: 'hidden' });
+        await checkShareDialog(mobilePage);
         await mobilePage.getByRole('button', { name: '编辑画像', exact: true }).waitFor();
         await assertNoHorizontalOverflow(mobilePage, `${width}px 已生成资料页`);
         assert.equal((await bootstrap(mobilePage)).profile.discoverable, false);

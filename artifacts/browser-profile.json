@@ -1,94 +1,27 @@
 {
   "suite": "profile",
-  "status": "passed",
-  "startedAt": "2026-09-13T04:35:03.073Z",
+  "status": "failed",
+  "startedAt": "2026-09-14T02:39:08.063Z",
   "checks": [
     {
       "label": "体验画像明确标注，尚未创建个人资料",
       "status": "passed",
-      "elapsedMs": 2232
+      "elapsedMs": 161
     },
     {
       "label": "画像向导限制 3–8 个兴趣，达到上限后可取消选择",
       "status": "passed",
-      "elapsedMs": 10532
+      "elapsedMs": 1352
     },
     {
       "label": "交流目标、文本与昵称经三步向导真实保存，规则生成正常",
-      "status": "passed",
-      "elapsedMs": 7426
-    },
-    {
-      "label": "个人页显示真实填写昵称与规则标签，初始不进入匹配池",
-      "status": "passed",
-      "elapsedMs": 883
-    },
-    {
-      "label": "可在资料页显式加入匹配，并在设置中撤回",
-      "status": "passed",
-      "elapsedMs": 2799
-    },
-    {
-      "label": "编辑保留输入，重新生成会增加版本并取消公开",
-      "status": "passed",
-      "elapsedMs": 3257
-    },
-    {
-      "label": "刷新后昵称、画像版本与私密设置保持一致",
-      "status": "passed",
-      "elapsedMs": 3605
-    },
-    {
-      "label": "人格卡按钮下载有效且非空的 1600×2200 PNG",
-      "status": "passed",
-      "elapsedMs": 2029
-    },
-    {
-      "label": "设置导出真实 JSON 资料，不包含 CSRF、会话或模型凭证",
-      "status": "passed",
-      "elapsedMs": 2910
-    },
-    {
-      "label": "未配置知乎时明确说明现状，并可继续编辑自己的兴趣",
-      "status": "passed",
-      "elapsedMs": 2158
-    },
-    {
-      "label": "390px 手机资料页和三步弹窗可完成操作且无横向溢出",
-      "status": "passed",
-      "elapsedMs": 15393
-    },
-    {
-      "label": "320px 手机资料页和三步弹窗可完成操作且无横向溢出",
-      "status": "passed",
-      "elapsedMs": 9237
-    },
-    {
-      "label": "删除需要填写确认，确认后清除账号与画像并进入新访客会话",
-      "status": "passed",
-      "elapsedMs": 1953
-    },
-    {
-      "label": "浏览器运行与静态资源无错误",
-      "status": "passed",
-      "elapsedMs": 0
+      "status": "failed",
+      "message": "Expected values to be strictly equal:\n\nfalse !== true\n",
+      "elapsedMs": 913
     }
   ],
   "pageErrors": [],
   "assetErrors": [],
-  "png": {
-    "bytes": 2407619,
-    "width": 1600,
-    "height": 2200,
-    "file": "profile-card.png"
-  },
-  "artifacts": [
-    "profile-desktop.png",
-    "profile-card.png",
-    "profile-my-data.json",
-    "profile-wizard-mobile.png",
-    "profile-mobile.png",
-    "profile-mobile-320.png"
-  ],
-  "finishedAt": "2026-09-13T04:36:09.327Z"
+  "error": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\nfalse !== true\n\n    at checkShareDialog (file:///home/xjl/Data/zhihu/project/knowledge-pipei/scripts/browser-profile.mjs:64:12)\n    at async file:///home/xjl/Data/zhihu/project/knowledge-pipei/scripts/browser-profile.mjs:165:5\n    at async check (file:///home/xjl/Data/zhihu/project/knowledge-pipei/scripts/browser-harness.mjs:50:13)\n    at async file:///home/xjl/Data/zhihu/project/knowledge-pipei/scripts/browser-profile.mjs:138:3\n    at async runBrowserSuite (file:///home/xjl/Data/zhihu/project/knowledge-pipei/scripts/browser-harness.mjs:53:5)\n    at async file:///home/xjl/Data/zhihu/project/knowledge-pipei/scripts/browser-profile.mjs:95:1",
+  "finishedAt": "2026-09-14T02:39:10.599Z"
 }

@@ -4,6 +4,7 @@ import { api, messageOf, setCSRF } from './api';
 import { Avatar, Empty, HeroArt, Logo, MatchCard, PoolToggle, Radar, SourceBadge, Spinner } from './components';
 import { ProfileWizard } from './ProfileWizard';
 import { ProfilePage } from './ProfilePage';
+import { PersonaShareDialog } from './PersonaShareDialog';
 import { ImportDialog, LoginDialog, SettingsDialog } from './AccountDialogs';
 import { MatchDialog } from './MatchDialog';
 import { ConnectionsPage } from './ConnectionsPage';
@@ -12,6 +13,7 @@ import { StarMap } from './StarMap';
 import { TOPICS } from '../shared/catalog';
 import type { Bootstrap, Match, Mode, Page, PageActions, Pool } from './types';
 import './pairing-entry.css';
+import './onboarding.css';
 
 const navigation = [
   { id: 'discover' as Page, label: '发现同频', icon: Compass },
@@ -21,11 +23,13 @@ const navigation = [
   { id: 'connections' as Page, label: '我的连接', icon: MessagesSquare },
 ];
 const currentPage = (): Page => navigation.some(item => item.id === location.hash.slice(1)) ? location.hash.slice(1) as Page : 'discover';
-type Modal = 'wizard' | 'login' | 'import' | 'settings' | null;
+type Modal = 'wizard' | 'login' | 'import' | 'settings' | 'share' | null;
 
 export default function App() {
   const [data, setData] = useState<Bootstrap | null>(null);
   const [bootError, setBootError] = useState('');
+  const [authReturn] = useState(() => new URLSearchParams(location.search).get('auth') === 'success');
+  const authHandled = useRef(false);
   const [page, setPage] = useState<Page>(currentPage);
   const [mobileMenu, setMobileMenu] = useState(false);
   const [modal, setModal] = useState<Modal>(null);
@@ -61,6 +65,11 @@ export default function App() {
     notify(text[auth] || '授权状态已更新', auth === 'failed' || auth === 'state_error');
     history.replaceState(null, '', location.pathname + location.hash);
   }, [notify]);
+  useEffect(() => {
+    if (!data || !authReturn || authHandled.current) return;
+    authHandled.current = true;
+    setModal(data.zhihuConnected && data.capabilities.zhihuData ? 'import' : 'wizard');
+  }, [data, authReturn]);
   useEffect(() => {
     if (!data?.user.id) return;
     const events = new EventSource('/api/events');
@@ -115,11 +124,27 @@ export default function App() {
   }, [allMatches, query, topic, tab]);
   if (!data) return <div className="boot-screen"><Logo/><div>{bootError ? <Empty title="连接暂时走远了" text={bootError} action="重新连接" onAction={() => { setBootError(''); refresh().catch(error => setBootError(messageOf(error))); }}/> : <Spinner text="让好奇心慢慢靠近…"/>}</div></div>;
 
-  const actions: PageActions = { data, refresh, notify, onCreate: () => open('wizard'), onLogin: () => open('login'), onImport: () => open(data.zhihuConnected ? 'import' : 'login'), onSelect: match => { setModal(null); setSelected(match); }, onSave, navigate };
+  const actions: PageActions = { data, refresh, notify, onCreate: () => open('wizard'), onShare: () => open('share'), onLogin: () => open('login'), onImport: () => open(data.zhihuConnected ? 'import' : 'login'), onSelect: match => { setModal(null); setSelected(match); }, onSave, navigate };
   const profile = data.profile || data.sampleProfile;
   const activeNavigation = navigation.find(item => item.id === page)!;
   const reset = async () => { setSelected(null); setModal(null); setConversationToOpen(null); setPool('demo'); setQuery(''); setTopic('all'); setTab('recommended'); await refresh(); navigate('discover'); };
-  return <div className="app-shell">
+  return <div className={data.profile ? 'app-shell' : 'onboarding-shell'}>
+    {!data.profile ? <main className="onboarding-page">
+      <Logo/>
+      <section className="onboarding-card">
+        <span className="onboarding-symbol"><Fingerprint size={40} strokeWidth={1.4}/></span>
+        <p className="eyebrow">从好奇心开始，认识独一无二的你</p>
+        <h1>先认识你，<br/>再遇见同频的人。</h1>
+        <p className="onboarding-description">接入知乎，带来你的兴趣线索；<br/>或亲手填写，让我们从你喜欢的话题开始。</p>
+        <div className="onboarding-actions">
+          <button className="button primary" onClick={actions.onImport}><span className="zhihu-mark" aria-hidden="true">知</span>{data.zhihuConnected ? '导入知乎兴趣' : '接入知乎'}<ArrowRight size={17}/></button>
+          <button className="button secondary" onClick={actions.onCreate}><Fingerprint size={18}/>手动填写兴趣<ArrowRight size={17}/></button>
+        </div>
+        <p className="onboarding-next"><Sparkles size={15}/>填写并确认后，揭晓你的人格卡片</p>
+        <p className="onboarding-privacy"><ShieldCheck size={14}/>由你决定分享什么，生成后默认不加入匹配池。</p>
+      </section>
+    </main> : <>
+
     {mobileMenu && <button className="sidebar-scrim" aria-label="关闭导航" onClick={() => setMobileMenu(false)}/>}
     <aside className={`sidebar ${mobileMenu ? 'sidebar-open' : ''}`}>
       <a href="#discover" className="brand-link" aria-label="同频首页" onClick={() => setMobileMenu(false)}><Logo/></a>
@@ -129,7 +154,7 @@ export default function App() {
       <div className="sidebar-bottom"><button className="nav-item privacy-nav" onClick={() => open('settings')}><ShieldCheck size={18}/><span>数据与隐私</span></button><div className="sidebar-user"><Avatar name={data.profile?.input.name || data.user.name} seed={data.user.id} src={data.user.avatar} size={36}/><div><strong>{data.profile?.input.name || '好奇的朋友'}</strong><span>{data.zhihuConnected ? '知乎已连接' : data.user.provider === 'zhihu' ? '知乎授权需重连' : '从兴趣开始探索'}</span></div><button className="icon-button" aria-label="账号设置" onClick={() => open('settings')}><ChevronRight size={16}/></button></div></div>
     </aside>
     <div className="workspace">
-      <header className="topbar"><div className="topbar-location"><button className="icon-button mobile-menu" aria-label="打开导航" aria-expanded={mobileMenu} onClick={() => setMobileMenu(!mobileMenu)}><Menu size={21}/></button><activeNavigation.icon size={16}/><span>{activeNavigation.label}</span><span className="breadcrumb-divider">/</span><span className="topbar-greeting">好奇的人，终会相遇</span></div><div className="topbar-actions"><span className="hackathon-badge"><i/>知乎黑客松 2026</span><button className="button zhihu-button" onClick={data.zhihuConnected ? actions.onImport : actions.onLogin}><span className="zhihu-mark">知</span>{data.zhihuConnected ? '导入知乎兴趣' : '连接知乎'}<ChevronRight size={14}/></button></div></header>
+      <header className="topbar"><div className="topbar-location"><button className="icon-button mobile-menu" aria-label="打开导航" aria-expanded={mobileMenu} onClick={() => setMobileMenu(!mobileMenu)}><Menu size={21}/></button><activeNavigation.icon size={16}/><span>{activeNavigation.label}</span><span className="breadcrumb-divider">/</span><span className="topbar-greeting">好奇的人，终会相遇</span></div><div className="topbar-actions"><span className="hackathon-badge"><i/>知乎黑客松 2026</span><button className="button zhihu-button" onClick={data.zhihuConnected ? actions.onImport : actions.onLogin}><span className="zhihu-mark" aria-hidden="true">知</span>{data.zhihuConnected ? '导入知乎兴趣' : '连接知乎'}<ChevronRight size={14}/></button></div></header>
       <main className="main-content" id="main-content">
         {page === 'discover' && <>
           <div className="welcome-row"><p className="eyebrow">A LITTLE CURIOSITY, A NEW CONNECTION</p><span>从一个好问题，认识一个新朋友</span></div>
@@ -157,7 +182,9 @@ export default function App() {
       </main>
     </div>
     <nav className="mobile-bottom-nav" aria-label="快捷导航">{navigation.map(item => <a key={item.id} href={`#${item.id}`} className={page === item.id ? 'active' : ''}><item.icon size={20}/><span>{item.label.replace('我的', '')}</span>{item.id === 'connections' && data.incomingCount > 0 && <i/>}</a>)}</nav>
-    {modal === 'wizard' && <ProfileWizard data={data} onClose={() => setModal(null)} onComplete={async () => { await refresh(); setModal(null); navigate(page === 'pairing' ? 'pairing' : 'profile'); }} notify={notify}/>}
+    </>}
+    {modal === 'wizard' && <ProfileWizard onSaved={() => setModal('share')} data={data} onClose={() => setModal(null)} onComplete={async () => { await refresh(); setModal(null); navigate(page === 'pairing' ? 'pairing' : 'profile'); }} notify={notify}/>}
+    {modal === 'share' && data.profile && <PersonaShareDialog key={data.user.id} profile={data.profile} onClose={() => setModal(null)} />}
     {modal === 'login' && <LoginDialog actions={actions} onClose={() => setModal(null)}/>}
     {modal === 'import' && <ImportDialog actions={actions} onClose={() => setModal(null)}/>}
     {modal === 'settings' && <SettingsDialog actions={actions} onClose={() => setModal(null)} onReset={reset}/>}

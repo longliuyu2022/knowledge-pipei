@@ -13,6 +13,7 @@ import { checkZhihuData, zhihuCheckRetryAt } from './zhihu-validation.js';
 import { AppError, fail, requiredText, optionalText } from './errors.js';
 import { buildProfile, compareProfiles, DEMO_PROFILES, SAMPLE_PROFILE } from './matching.js';
 import { TOPIC_MAP, GOALS, STYLES } from '../shared/catalog.js';
+import { PERSONA_DRIVES, PERSONA_CONNECTIONS } from '../shared/personas.js';
 
 const secureEqual = (a, b) => {
   if (typeof a !== 'string' || typeof b !== 'string' || !a.length || a.length !== b.length) return false;
@@ -35,7 +36,14 @@ export function validateProfile(input) {
   if (!Array.isArray(input.topicIds) || input.topicIds.length < 3 || input.topicIds.length > 8 || new Set(input.topicIds).size !== input.topicIds.length || input.topicIds.some(id => !TOPIC_MAP.has(id))) fail(400, 'invalid_topics', '请选择 3–8 个不同的兴趣');
   if (!Array.isArray(input.goals) || !input.goals.length || input.goals.length > 3 || new Set(input.goals).size !== input.goals.length || input.goals.some(id => !GOALS.some(g => g.id === id))) fail(400, 'invalid_goals', '请至少选择一种交流期待');
   if (!STYLES.some(s => s.id === input.styleId)) fail(400, 'invalid_style', '请选择一种喜欢的交流方式');
-  return { name, topicIds: [...input.topicIds], about: optionalText(input.about, '自我介绍', 360), question: optionalText(input.question, '好奇的问题', 200), goals: [...input.goals], styleId: input.styleId };
+  const persona = {};
+  for (const [key, options] of [['personaDrive', PERSONA_DRIVES], ['personaConnection', PERSONA_CONNECTIONS]]) {
+    if (input[key] !== undefined) {
+      if (!options.some(option => option.id === input[key])) fail(400, 'invalid_persona', '请选择有效的人格探索方向');
+      persona[key] = input[key];
+    }
+  }
+  return { name, topicIds: [...input.topicIds], about: optionalText(input.about, '自我介绍', 360), question: optionalText(input.question, '好奇的问题', 200), goals: [...input.goals], styleId: input.styleId, ...persona };
 }
 
 export function createApp(config, options = {}) {

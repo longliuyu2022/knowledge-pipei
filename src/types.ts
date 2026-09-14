@@ -4,6 +4,7 @@ export type Mode = 'resonance' | 'complement';
 export type AnalysisMode = 'model' | 'rules';
 export interface Input {
   name: string; topicIds: string[]; about: string; question: string; styleId: string; goals: string[];
+  personaDrive?: string; personaConnection?: string;
 }
 export interface Interest { id: string; label: string; weight: number }
 export interface Dimension { id: string; label: string; color: string; value: number }
@@ -67,7 +68,7 @@ export interface Message { id: string; authorId: string; text: string; createdAt
 export interface Conversation { person: Person; invitation: string; items: Message[]; hasMore: boolean; nextBefore: string | null }
 export interface PageActions {
   data: Bootstrap; refresh: () => Promise<void>; notify: (text: string, error?: boolean) => void;
-  onCreate: () => void; onLogin: () => void; onImport: () => void;
+  onCreate: () => void; onShare: () => void; onLogin: () => void; onImport: () => void;
   onSelect: (match: Match) => void; onSave: (match: Match) => Promise<void>;
   navigate: (page: Page, pool?: Pool) => void;
 }
