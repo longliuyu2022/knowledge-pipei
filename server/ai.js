@@ -106,7 +106,7 @@ export class Intelligence {
   }
   async enrichProfile(profile, useAI = true) {
     if (!useAI) return { ...profile, analysis: { mode: 'rules', notice: '根据你选择的兴趣和主动填写的内容整理。' } };
-    const evidence = profile.evidence.map(({ id, text, label, kind }) => ({ id, text, label, kind }));
+    const evidence = profile.evidence.slice(0, 120).map(({ id, text, label, kind }) => ({ id, text, label, kind }));
     const result = await this.memo(`profile:${hash([profile.input, evidence])}`, async () => {
       try {
         const answer = await this.generate(

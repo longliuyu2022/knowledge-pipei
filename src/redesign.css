@@ -4,10 +4,10 @@
   --soft: #eaf3ff; --ink: #172b4d; --text: #172b4d;
   --muted: #596579; --border: #dfe5ec; --line: #dfe5ec;
 }
-.tongzhi-shell { background: #f6f8fa; font-size: 17px; line-height: 1.6; }
+.tongzhi-shell { background: #f5f8fc; font-size: 18px; line-height: 1.65; }
 .tongzhi-shell .sidebar, .tongzhi-shell .topbar { background: #fff; border-color: var(--border); }
 .tongzhi-shell .main-content { max-width: 1600px; margin-inline: auto; padding: 32px; }
-.tongzhi-shell .nav-item { font-size: 17px; color: var(--muted); }
+.tongzhi-shell .nav-item { font-size: 18px; color: var(--muted); }
 .tongzhi-shell .nav-item.active, .tongzhi-shell .nav-item:hover,
 .tongzhi-shell .tz-tabs > button.active, .tongzhi-shell .tz-mode-grid > button.active {
   color: #0456b8; background: #eaf3ff; border-color: #b6d5fa;
@@ -15,21 +15,23 @@
 .tongzhi-shell .tz-brand-mark, .tongzhi-shell .nav-indicator, .tongzhi-shell .nav-badge { background: #056de8; }
 .tongzhi-shell .tz-brand strong, .tongzhi-shell .page-title h1,
 .tongzhi-shell .tz-card h2, .tongzhi-shell .profile-persona h2 { color: var(--ink); }
-.tongzhi-shell .button { font-size: 16px; min-height: 46px; padding: 12px 20px; }
+.tongzhi-shell .button { font-size: 18px; min-height: 48px; padding: 12px 22px; }
 .tongzhi-shell .button.primary { background: #0563d6; color: #fff; box-shadow: 0 4px 14px #056de81a; }
 .tongzhi-shell .button.primary:hover:not(:disabled) { background: #0456b8; }
 .tongzhi-shell .button.secondary { color: #0456b8; border-color: #c5d9ef; background: #fff; }
-.tongzhi-shell .text-button { color: #0456b8; font-size: 15px; }
-.tongzhi-shell .page-title h1 { font-size: clamp(28px, 3vw, 32px); }
+.tongzhi-shell .text-button { color: #0456b8; font-size: 16px; }
+.tongzhi-shell .page-title h1 { font-size: clamp(32px, 3vw, 38px); }
 .tongzhi-shell .page-title > div > p:last-child,
 .tongzhi-shell .tz-muted, .tongzhi-shell .tz-form label,
 .tongzhi-shell .tz-form textarea, .tongzhi-shell .profile-persona-summary,
-.tongzhi-shell .persona-analysis-grid p, .tongzhi-shell .tz-reasons { font-size: 17px; line-height: 1.65; color: var(--muted); }
+.tongzhi-shell .persona-analysis-grid p, .tongzhi-shell .tz-reasons { font-size: 18px; line-height: 1.65; color: var(--muted); }
 .tongzhi-shell .tz-caption, .tongzhi-shell .profile-caption,
-.tongzhi-shell .tz-consent, .tongzhi-shell .tz-mode-grid > button span { font-size: 14px; color: var(--muted); }
-.tongzhi-shell .tag, .tongzhi-shell .tz-tabs > button { font-size: 15px; }
-.tongzhi-shell .tag-purple, .tongzhi-shell .tz-status, .tongzhi-shell .tz-ai-badge { color: #0456b8; background: #eaf3ff; }
-.tongzhi-shell .tz-card, .tongzhi-shell .panel { border-color: var(--border); background: #fff; border-radius: 18px; }
+.tongzhi-shell .tz-consent, .tongzhi-shell .tz-mode-grid > button span { font-size: 16px; color: var(--muted); }
+.tongzhi-shell .tag, .tongzhi-shell .tz-tabs > button { font-size: 16px; }
+.tongzhi-shell .tag, .tongzhi-shell .tag-purple, .tongzhi-shell .tz-status, .tongzhi-shell .tz-ai-badge,
+.tongzhi-shell .pill, .tongzhi-shell .header-tag { color: #0456b8; background: #eaf3ff; border-color: #cfe3fb; }
+.tongzhi-shell .tz-card, .tongzhi-shell .panel, .tongzhi-shell .cz-side-card,
+.tongzhi-shell .community-card, .tongzhi-shell .discussion-panel { border-color: #d8e6f5; background: #fff; border-radius: 18px; }
 .tongzhi-shell .tz-card { padding: 28px; }
 .tongzhi-shell .eyebrow, .tongzhi-shell .topbar-greeting,
 .tongzhi-shell .hackathon-badge, .tongzhi-shell .page-footer,
@@ -57,13 +59,13 @@
 .tongzhi-shell .tz-companion-chat { height: max(650px, calc(100dvh - 190px)); }
 .tongzhi-shell .tz-companion-messages { flex: 1; min-height: 120px; max-height: none; }
 .tongzhi-shell .tz-session-sidebar { max-height: calc(100dvh - 190px); overflow: auto; }
-.tongzhi-shell .conversation-message-content > p, .tongzhi-shell .tz-ai-message > p { font-size: 17px; line-height: 1.65; }
+.tongzhi-shell .conversation-message-content > p, .tongzhi-shell .tz-ai-message > p { font-size: 18px; line-height: 1.65; }
 .tongzhi-shell .conversation-message.is-mine .conversation-message-content > p,
 .tongzhi-shell .tz-ai-message.is-mine > p { background: #eaf3ff; color: #172b4d; border-color: #c5d9ef; }
 .tongzhi-shell .conversation-list-item.active { background: #eaf3ff; }
 .tongzhi-shell .conversation-list-copy strong { font-size: 16px; }
 .tongzhi-shell .conversation-composer textarea, .tongzhi-shell .tz-chat-composer textarea {
-  font-size: 17px; line-height: 1.6; min-height: 90px; max-height: 180px; field-sizing: content;
+  font-size: 18px; line-height: 1.65; min-height: 100px; max-height: 200px; field-sizing: content;
 }
 .tongzhi-shell .conversation-message-meta, .tongzhi-shell .tz-message-label { font-size: 14px; }
 .tongzhi-shell .mobile-bottom-nav { grid-template-columns: repeat(4, 1fr); }
@@ -76,6 +78,50 @@
 .tongzhi-shell .cz-text-button { color: #0456b8; font-size: 15px; }
 .tongzhi-shell .cz-directory-heading h1 { font-size: 32px; }
 .tongzhi-shell .cz-directory-heading p { font-size: 17px; }
+.tongzhi-shell .cz-page, .tongzhi-shell .cz-directory-aside, .tongzhi-shell .cz-side-soft,
+.tongzhi-shell .tz-soft-card, .tongzhi-shell .profile-radar-panel { background: #f2f7fd; }
+.tongzhi-shell .cz-search-input, .tongzhi-shell input, .tongzhi-shell textarea, .tongzhi-shell select { border-color: #cddff2; }
+.tongzhi-shell .conversation-messages { background: #f2f4f7; padding: 28px; }
+.tongzhi-shell .conversation-message { gap: 12px; }
+.tongzhi-shell .conversation-message > .avatar { margin-top: 25px; border-radius: 8px; }
+.tongzhi-shell .conversation-message-content { max-width: min(620px, 78%); }
+.tongzhi-shell .conversation-message-content > p { position: relative; color: #243b53; background: #fff; border: 0; border-radius: 8px; padding: 13px 17px; box-shadow: 0 1px 2px #15395b10; }
+.tongzhi-shell .conversation-message-content > p::before { content: ''; position: absolute; top: 13px; left: -7px; border-width: 6px 8px 6px 0; border-style: solid; border-color: transparent #fff transparent transparent; }
+.tongzhi-shell .conversation-message.is-mine .conversation-message-content > p { color: #fff; background: #1677d2; border: 0; border-radius: 8px; }
+.tongzhi-shell .conversation-message.is-mine .conversation-message-content > p::before { left: auto; right: -7px; border-width: 6px 0 6px 8px; border-color: transparent transparent transparent #1677d2; }
+.tongzhi-shell .conversation-message-meta { color: #76879a; font-size: 15px; }
+.tongzhi-shell .conversation-origin, .tongzhi-shell .tz-chat-safety-note,
+.tongzhi-shell .conversation-keyboard-tip { display: none; }
+.tongzhi-shell .conversation-composer { padding: 18px 22px; background: #fff; border-top-color: #dce7f2; }
+.tongzhi-shell .conversation-composer > textarea { padding: 12px 14px; background: #f7f9fb; border: 1px solid #dce4ec; border-radius: 8px; }
+.tongzhi-shell .seeking-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(310px, 1fr)); gap: 18px; }
+.tongzhi-shell .seeking-card { display: flex; flex-direction: column; gap: 18px; border: 1px solid #d8e6f5; border-radius: 16px; padding: 22px; background: linear-gradient(145deg, #fff, #f4f9ff); }
+.tongzhi-shell .seeking-card > p { font-size: 17px; color: var(--muted); margin: 0; }
+.tongzhi-shell .seeking-card > .button { align-self: flex-start; }
+.tongzhi-shell .seeking-start { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 17px 20px; margin-bottom: 20px; border-radius: 12px; background: #eaf3ff; }
+.tongzhi-shell .seeking-start p { margin: 0; }
+.tongzhi-shell .matching-primary { margin-top: 24px; min-width: 190px; }
+.tongzhi-shell .matching-summary .redesign-details { margin-bottom: 0; }
+.tongzhi-shell .zhihu-material { position: relative; min-height: 130px; padding-right: 115px; background: linear-gradient(120deg, #eaf3ff, #fff); border-radius: 16px; }
+.tongzhi-shell .zhihu-material > img { position: absolute; right: 16px; bottom: 0; width: 105px; height: 105px; object-fit: contain; }
+.tongzhi-shell .import-source-option { border-color: #d8e6f5; background: #f8fbff; }
+.tongzhi-shell .import-source-option.selected { border-color: #78afea; background: #eaf3ff; }
+.tongzhi-shell .import-source-icon, .tongzhi-shell .import-result-icon { color: #056de8; background: #dceeff; }
+.tongzhi-shell .button.secondary:hover:not(:disabled), .tongzhi-shell .icon-button:hover:not(:disabled) { color: #0456b8; background: #eaf3ff; }
+.tongzhi-shell .source-badge, .tongzhi-shell .source-ai, .tongzhi-shell .preview-badge { color: #0456b8; background: #eaf3ff; }
+.tongzhi-shell .mobile-bottom-nav > a > i { background: #056de8; }
+.tongzhi-shell .conversation-starter { border-color: #dce7f2; }
+.tongzhi-shell .conversation-starter-toggle, .tongzhi-shell .conversation-starter-sources,
+.tongzhi-shell .conversation-starter-sources a { color: #0456b8; }
+.tongzhi-shell .conversation-starter-questions button { color: #315f8f; background: #f3f8fe; border-color: #d5e6f8; font-size: 15px; }
+.tongzhi-shell .conversation-starter-questions button:hover { color: #0456b8; background: #eaf3ff; border-color: #a9cdf4; }
+.tongzhi-shell .conversation-list-item:hover { background: #f3f8fe; }
+.tongzhi-shell .invite-steps li > span { color: #056de8; background: #eaf3ff; border-color: #cfe3fb; }
+.tongzhi-shell .profile-interest-track > div, .tongzhi-shell .profile-interest-track > span,
+.tongzhi-shell .tz-interest-bars i { background: #1677d2; }
+.tongzhi-shell .persona-explorer, .tongzhi-shell .profile-visibility-panel,
+.tongzhi-shell .tz-info { border-color: #d5e6f8; background: #f3f8fe; }
+.tongzhi-shell .persona-analysis-grid > article { border-color: #d8e6f5; background: #f8fbff; }
 @media (max-width: 760px) {
   .redesign-ai-back { display: inline-flex; margin-bottom: 12px; }
   .tongzhi-shell .tz-companion-layout.has-selection .tz-session-sidebar { display: none; }

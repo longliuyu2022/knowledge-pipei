@@ -46,11 +46,23 @@ test('OAuth uses form exchange and the user OAuth credential for /user; business
   await zhihu.import('test-user', ['contents']);
   const business = calls[2];
   assert.equal(business.url.pathname, '/api/v1/user/contents');
-  assert.equal(business.url.searchParams.get('Limit'), '10'); assert.equal(business.url.searchParams.get('ContentType'), 'all');
+  assert.equal(business.url.searchParams.get('Limit'), '50'); assert.equal(business.url.searchParams.get('ContentType'), 'all');
   assert.equal(business.options.headers.Authorization, 'Bearer test-access-secret');
   assert.equal(business.options.headers['X-OAuth-Token'], 'test-user-oauth-token');
   assert.ok(Math.abs(Number(business.options.headers['X-Request-Timestamp']) - Date.now() / 1000) < 3);
   for (const call of calls) assert.equal(call.options.redirect, 'error');
+});
+
+test('imports follow every available page and preserve all returned summaries', async () => {
+  const offsets = [];
+  const zhihu = new Zhihu(config(), { fetchImpl: async url => {
+    const current = new URL(url), offset = current.searchParams.get('Offset') || '0'; offsets.push(offset);
+    const last = offset === '50';
+    return json({ Code: 0, Data: { Items: [{ Title: `第 ${offset} 页`, Summary: '公开摘要', Url: `https://www.zhihu.com/question/${last ? 2 : 1}` }], Paging: { IsEnd: last, NextOffset: last ? '' : '50', Totals: 2 } } });
+  } });
+  zhihu.setToken('user', 'test-token');
+  const imported = await zhihu.import('user', ['contents']);
+  assert.deepEqual(offsets, ['0', '50']); assert.equal(imported.counts.contents, 2); assert.equal(imported.items.length, 2);
 });
 
 test('OAuth handles historical success codes, prefers hash identity, and rejects error or missing identity payloads', async () => {

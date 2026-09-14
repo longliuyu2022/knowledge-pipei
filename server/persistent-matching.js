@@ -121,6 +121,35 @@ export class PersistentMatching {
       notice: req?.reason || (req?.status === 'searching' ? '正在后台寻找合适的人，关闭页面也会继续。' : null),
     };
   }
+  browse(userId, mode = 'resonance') {
+    if (!['resonance', 'complement'].includes(mode)) fail(400, 'invalid_mode', '请选择同频或互补匹配');
+    const own = this.store.profile(userId);
+    if (!own) fail(400, 'profile_required', '先生成并确认知识画像，再查看正在寻找的人');
+    const rows = this.db.prepare("SELECT r.* FROM match_requests r LEFT JOIN match_slots s ON s.user_id=r.user_id WHERE r.status='searching' AND r.expires_at>? AND r.user_id!=? AND s.user_id IS NULL ORDER BY r.created_at LIMIT 200").all(this.now(), userId);
+    const items = rows.filter(row => this.valid(row) && !this.store.isBlocked(userId, row.user_id) && !this.store.activeInvitationBetween(userId, row.user_id)).map(row => {
+      const person = this.store.privateProfileCard(row.user_id);
+      return { requestId: row.id, person: { ...compareProfiles(own, person, mode), saved: this.store.savedIds(userId).includes(row.user_id) }, expiresAt: iso(row.expires_at) };
+    }).filter(item => item.person.shared.length > 0).sort((a, b) => b.person.score - a.person.score || a.person.id.localeCompare(b.person.id)).slice(0, 50);
+    return { items, mode };
+  }
+  apply(userId, targetId) {
+    if (typeof targetId !== 'string' || !/^[a-zA-Z0-9_-]{1,160}$/.test(targetId) || targetId === userId) fail(400, 'invalid_target', '请选择有效的匹配对象');
+    const own = this.request(userId), target = this.request(targetId);
+    if (!this.valid(own) || own.status !== 'searching') fail(409, 'matching_inactive', '请先开始匹配，再主动申请');
+    if (!this.valid(target) || target.status !== 'searching' || this.store.isBlocked(userId, targetId) || this.store.activeInvitationBetween(userId, targetId)) fail(409, 'matching_changed', '对方的寻找状态已改变，请刷新');
+    if (this.db.prepare('SELECT 1 FROM match_slots WHERE user_id IN (?,?)').get(userId, targetId)) fail(409, 'matching_changed', '一方已有待确认的匹配，请刷新');
+    const recent = this.db.prepare("SELECT 1 FROM match_proposals WHERE ((a_id=? AND b_id=?) OR (a_id=? AND b_id=?)) AND created_at>? AND status IN ('pending','declined','expired','cancelled')").get(userId, targetId, targetId, userId, this.now() - 7 * 86400000);
+    if (recent) fail(409, 'matching_repeated', '近期已向这位伙伴申请过，先给彼此一点时间');
+    const id = randomUUID(), now = this.now();
+    this.store.transaction(() => {
+      this.db.prepare('INSERT INTO match_proposals(id,a_id,b_id,a_request,b_request,a_revision,b_revision,a_accepted,created_at,expires_at) VALUES (?,?,?,?,?,?,?,1,?,?)').run(id, userId, targetId, own.id, target.id, own.profile_revision, target.profile_revision, now, Math.min(now + this.proposalMs, own.expires_at, target.expires_at));
+      this.db.prepare('INSERT INTO match_slots VALUES (?,?)').run(userId, id); this.db.prepare('INSERT INTO match_slots VALUES (?,?)').run(targetId, id);
+      this.db.prepare("UPDATE match_requests SET status='proposed',reason='' WHERE user_id IN (?,?)").run(userId, targetId);
+      this.notify(targetId, { kind: 'match', title: '收到一位同频伙伴的申请', body: '对方已表示愿意连接，你确认后即可开始聊天。', href: '#matching', key: `proposal:${id}` });
+      this.notify(userId, { kind: 'match', title: '匹配申请已发出', body: '对方确认后会建立聊天。', href: '#matching', key: `proposal:${id}` });
+    });
+    return this.snapshot(userId);
+  }
   state(userId) { this.tick(); return this.snapshot(userId); }
   start(userId, { revision, mode = 'resonance', question = '' } = {}) {
     this.tick();
@@ -188,7 +217,9 @@ export class PersistentMatching {
   router(rate) {
     const router = express.Router();
     router.get('/', (req, res) => res.json(this.state(req.viewer.id)));
+    router.get('/searching', (req, res) => res.json(this.browse(req.viewer.id, req.query.mode)));
     router.post('/start', (req, res) => { rate(`match-start:${req.viewer.id}`, 8); res.json(this.start(req.viewer.id, req.body)); });
+    router.post('/apply', (req, res) => { rate(`match-apply:${req.viewer.id}`, 12); res.json(this.apply(req.viewer.id, req.body.targetId)); });
     for (const action of ['pause', 'resume', 'cancel']) router.post(`/${action}`, (req, res) => { rate(`match-control:${req.viewer.id}`, 30); res.json(this.control(req.viewer.id, req.body.requestId, action)); });
     router.post('/respond', (req, res) => { rate(`match-response:${req.viewer.id}`, 20); res.json(this.respond(req.viewer.id, req.body.proposalId, req.body.decision)); });
     return router;

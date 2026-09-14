@@ -69,12 +69,16 @@ export class Zhihu {
     if (!subject) fail(401, 'zhihu_identity_missing', '知乎未返回有效用户身份，请重新连接');
     return { identity: { subject, subjectKind:hashSubject?'hash':'uid', name: clean(profile.fullname, 24) || '知乎用户', avatar: safeZhihuUrl(profile.avatar_path, true) }, token: tokenData.access_token, expiresIn: tokenData.expires_in };
   }
-  async business(path, params, userId = null) {
+  async business(path, params, userId = null, waitForSlot = false) {
     if (!this.config.zhihu.accessSecret) fail(503, 'zhihu_unconfigured', '知乎内容连接暂未开放，可以先填写兴趣');
     const token = userId ? this.token(userId) : null;
     const grant = userId ? this.tokens.get(userId) : null;
     if (userId && !token) fail(401, 'zhihu_expired', '请重新连接知乎后再导入');
     this.calls = this.calls.filter(t => Date.now() - t < 60000);
+    if (waitForSlot && this.calls.length >= 5 && this.cooldown <= Date.now()) {
+      await new Promise(resolve => setTimeout(resolve, Math.max(1, this.calls[0] + 60050 - Date.now())));
+      this.calls = this.calls.filter(t => Date.now() - t < 60000);
+    }
     if (this.cooldown > Date.now() || this.calls.length >= 5) fail(429, 'zhihu_rate_limited', '知乎请求较多或今日额度已用完，请稍后再试');
     this.calls.push(Date.now());
     const url = new URL(`https://developer.zhihu.com${path}`);
@@ -109,12 +113,30 @@ export class Zhihu {
   }
   async import(userId, sources) {
     if (!this.token(userId)) fail(401, 'zhihu_expired', '请先连接知乎，再选择导入的内容');
-    const routes = { contents: '/api/v1/user/contents', followees: '/api/v1/user/followees', collections: '/api/v1/user/collections' };
     const items = [], counts = {};
+    const pages = async (path, params = {}) => {
+      const result = []; let offset = '0', page = 0;
+      while (page++ < 1000) {
+        const data = await this.business(path, { ...params, Limit: 50, Offset: offset }, userId, true);
+        result.push(...data.Items);
+        if (!data.Paging || data.Paging.IsEnd !== false) break;
+        const next = String(data.Paging.NextOffset ?? '');
+        if (!/^\d+$/.test(next) || next === offset) fail(502, 'zhihu_response_invalid', '知乎分页信息不完整，本次导入已停止');
+        offset = next;
+      }
+      return result;
+    };
     for (const source of sources) {
-      const data = await this.cached(`user:${userId}:${source}`, () => this.business(routes[source], { Limit: 10, ...(source === 'contents' ? { ContentType: 'all', SortField: 'ts', SortOrder: 'desc' } : {}) }, userId));
-      counts[source] = Math.min(10, data.Items.length);
-      for (const item of data.Items.slice(0, 10)) {
+      const sourceItems = await this.cached(`user:${userId}:${source}:all`, async () => {
+        if (source === 'contents') return pages('/api/v1/user/contents', { ContentType: 'all', SortField: 'ts', SortOrder: 'desc' });
+        if (source === 'followees') return pages('/api/v1/user/followees');
+        const lists = await this.business('/api/v1/user/favlists', { Limit: 50 }, userId, true), collected = [];
+        for (const list of lists.Items.filter(item => item.IsPublic !== false && /^\d+$/.test(String(item.UrlToken)))) collected.push(...await pages('/api/v1/user/favlist_contents', { FavlistUrlToken: String(list.UrlToken) }));
+        if (!lists.Items.length) collected.push(...(await this.business('/api/v1/user/collections', { Limit: 50 }, userId, true)).Items);
+        return [...new Map(collected.map((item, index) => [safeZhihuUrl(item.Url) || `item:${index}`, item])).values()];
+      });
+      counts[source] = sourceItems.length;
+      for (const item of sourceItems) {
         const title = clean(source === 'followees' ? item.Fullname : item.Title, 160);
         const summary = clean(source === 'followees' ? item.Headline : item.Summary, 500);
         if (!title && !summary) continue;

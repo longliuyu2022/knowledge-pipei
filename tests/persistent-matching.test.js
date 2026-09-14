@@ -50,6 +50,22 @@ test('persistent matching requires explicit participation without requiring a pu
   assert.deepEqual(counts, { searching: 0, proposed: 2 }); assert.equal(JSON.stringify(counts).includes(a), false);
 });
 
+test('searching people can be browsed by profile fit and actively applied to', t => {
+  const f = harness(t), seeker = f.user('正在寻找的人'), applicant = f.user('主动申请的人');
+  f.start(seeker);
+  const listed = f.matching.browse(applicant);
+  assert.equal(listed.items.length, 1); assert.equal(listed.items[0].person.id, seeker);
+  f.matching.running = true;
+  const own = f.start(applicant);
+  f.matching.running = false;
+  assert.equal(own.request.status, 'searching');
+  const applied = f.matching.apply(applicant, seeker);
+  assert.equal(applied.proposal.person.id, seeker); assert.equal(applied.proposal.acceptedByMe, true);
+  const incoming = f.matching.state(seeker);
+  assert.equal(incoming.proposal.person.id, applicant); assert.equal(incoming.proposal.acceptedByOther, true);
+  assert.ok(f.matching.respond(seeker, incoming.proposal.id, 'accept').conversationId);
+});
+
 test('offline requests and the first acceptance survive actual database reopening before the second acceptance', t => {
   const f = harness(t, { persistent: true }), a = f.user('先离线的甲'), b = f.user('稍后上线的乙');
   const original = f.start(a).request;

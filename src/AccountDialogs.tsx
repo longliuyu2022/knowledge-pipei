@@ -3,6 +3,7 @@ import { ArrowDownToLine, ArrowRight, ArrowUpRight, BookOpen, Bookmark, Check, C
 import { api, APIError, formatTime, messageOf } from './api';
 import { Avatar, Dialog, Spinner } from './components';
 import { ZhihuDataCheck } from './ZhihuDataCheck';
+import { LIU_KANSHAN_IMAGE } from './zhihu-assets';
 import type { PageActions, Profile } from './types';
 import './profile.css';
 
@@ -139,12 +140,12 @@ export function LoginDialog({ actions, onClose }: DialogProps) {
 const importOptions = [
   { id: 'contents' as const, label: '我的创作', description: '公开回答、文章等内容的标题与摘要', Icon: FileText, unit: '条' },
   { id: 'followees' as const, label: '我关注的人', description: '公开昵称与一句话介绍，寻找兴趣线索', Icon: Users, unit: '位' },
-  { id: 'collections' as const, label: '我的近期收藏', description: '近期公开收藏的标题与摘要，仅限最近一批', Icon: Bookmark, unit: '条' },
+  { id: 'collections' as const, label: '我的公开收藏', description: '遍历公开收藏夹与其中的可读摘要', Icon: Bookmark, unit: '条' },
 ];
 
 export function ImportDialog({ actions, onClose }: DialogProps) {
   const { data } = actions;
-  const [sources, setSources] = useState<ImportSource[]>([]);
+  const [sources, setSources] = useState<ImportSource[]>(['contents', 'followees', 'collections']);
   const [useAI, setUseAI] = useState(false);
   const [busy, setBusy] = useState(false);
   const [checking, setChecking] = useState(false);
@@ -185,13 +186,13 @@ export function ImportDialog({ actions, onClose }: DialogProps) {
       {refreshFailed ? <button className="button primary" disabled={working} onClick={retryRefresh}>{busy ? <Spinner text="同步中…" /> : <><RefreshCw size={16} />同步最新资料</>}</button> : <button className="button primary" disabled={working} onClick={() => { onClose(); if (result.profile) { actions.navigate('profile'); actions.onShare(); } else actions.onCreate(); }}>{result.profile ? '查看我的知识人格' : '创建我的知识人格'}<ArrowRight size={16} /></button>}
       <button className="text-button" disabled={working} onClick={onClose}>完成</button>
     </div> : <form onSubmit={submit}>
-      <div className="import-intro"><span><BookOpen size={23} /></span><div><h3>你选择的内容，才会成为线索</h3><p>只读取你主动勾选的公开摘要与简介，每类最多 10 条。</p></div></div>
+      <div className="import-intro zhihu-material"><img src={LIU_KANSHAN_IMAGE} alt="知乎刘看山"/><div><h3>导入全部可获取的知乎线索</h3><p>按页读取公开创作、关注和收藏，自动去重。</p></div></div>
       {!available && <div className="login-status-note"><CircleHelp size={18} /><div><strong>{!data.capabilities.zhihuData ? '知乎内容导入暂未开放' : '请先连接自己的知乎账号'}</strong><p>{!data.capabilities.zhihuData ? '现在仍可用手动填写的兴趣生成画像。' : '连接后，你可以选择要导入的内容。'}</p></div></div>}
-      <fieldset disabled={working || !available} className="import-options"><legend className="import-options-legend">选择本次导入的来源</legend>{importOptions.map(option => <label key={option.id} className={`import-source-option ${sources.includes(option.id) ? 'selected' : ''}`}><input type="checkbox" checked={sources.includes(option.id)} onChange={event => { setSources(current => event.target.checked ? [...current, option.id] : current.filter(id => id !== option.id)); setError(''); }} /><span className="import-source-icon"><option.Icon size={20} /></span><span className="import-source-text"><strong>{option.label}<small>最多 10 {option.unit}</small></strong><span>{option.description}</span></span></label>)}</fieldset>
+      <fieldset disabled={working || !available} className="import-options"><legend className="import-options-legend">导入范围</legend>{importOptions.map(option => <label key={option.id} className={`import-source-option ${sources.includes(option.id) ? 'selected' : ''}`}><input type="checkbox" checked={sources.includes(option.id)} onChange={event => { setSources(current => event.target.checked ? [...current, option.id] : current.filter(id => id !== option.id)); setError(''); }} /><span className="import-source-icon"><option.Icon size={20} /></span><span className="import-source-text"><strong>{option.label}<small>全部可获取</small></strong><span>{option.description}</span></span></label>)}</fieldset>
       {data.profile && <label className={`wizard-consent import-ai-consent ${!available || !data.capabilities.ai ? 'unavailable' : ''}`}><input type="checkbox" checked={useAI} disabled={working || !available || !data.capabilities.ai} onChange={event => setUseAI(event.target.checked)} /><span><strong><Sparkles size={15} />使用 AI 重新解读我的画像</strong><small>{data.capabilities.ai ? '允许将所选摘要与已有兴趣交给 AI 解读。关闭后按兴趣规则更新。' : 'AI 解读暂不可用，将按兴趣规则更新。'}</small></span></label>}
       <div className="import-scope-note"><LockKeyhole size={15} /><p>{data.imports.count ? '本次导入会替换上次导入的内容。' : '导入的原始摘要仅自己可见，可在设置中清除。'}{data.profile ? '更新后的画像将暂时退出匹配，查看后可重新加入。' : '创建画像时，你可以选择是否使用 AI 解读。'}</p></div>
       {error && <p className="form-error" role="alert">{error}</p>}
-      <div className="import-footer"><button type="button" className="button secondary" disabled={working} onClick={onClose}>暂不导入</button>{!available ? <button type="button" className="button primary" onClick={() => { onClose(); if (data.capabilities.zhihuData) actions.onLogin(); else actions.onCreate(); }}>{data.capabilities.zhihuData ? '连接知乎账号' : '用兴趣创建画像'}<ArrowRight size={15} /></button> : <button type="submit" className="button primary" disabled={working || !sources.length}>{busy ? <Spinner text="正在读取并整理…" /> : <><ArrowDownToLine size={16} />{data.profile ? '导入并更新画像' : '导入所选摘要'}{sources.length > 0 && <span>({sources.length})</span>}</>}</button>}</div>
+      <div className="import-footer"><button type="button" className="button secondary" disabled={working} onClick={onClose}>暂不导入</button>{!available ? <button type="button" className="button primary" onClick={() => { onClose(); if (data.capabilities.zhihuData) actions.onLogin(); else actions.onCreate(); }}>{data.capabilities.zhihuData ? '连接知乎账号' : '用兴趣创建画像'}<ArrowRight size={15} /></button> : <button type="submit" className="button primary" disabled={working || !sources.length}>{busy ? <Spinner text="正在分页导入…" /> : <><ArrowDownToLine size={16} />导入全部可获取数据</>}</button>}</div>
     </form>}
     {data.capabilities.zhihuData && <ZhihuDataCheck key={data.user.id} actions={actions} disabled={busy} onBusyChange={setChecking} onReconnect={() => { onClose(); actions.onLogin(); }}/>}
   </Dialog>;
