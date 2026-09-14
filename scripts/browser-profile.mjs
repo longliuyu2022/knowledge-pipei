@@ -100,11 +100,11 @@ await runBrowserSuite('profile', async ({ newContext, origin, check, artifactsDi
   let initial, created, updated;
   const artifacts = [];
 
-  await check('体验画像明确标注，尚未创建个人资料', async () => {
+  await check('新访客先进入引导，尚未创建个人资料', async () => {
     await page.goto('/#profile', { waitUntil: 'domcontentloaded' });
-    await page.getByRole('heading', { name: '我的知识人格', exact: true }).waitFor();
-    await page.getByRole('button', { name: '创建我的画像', exact: true }).waitFor();
-    assert.match(await page.locator('.profile-sample-notice').innerText(), /体验示例.*不是对你的分析/s);
+    await page.getByRole('heading', { name: /先认识你/ }).waitFor();
+    await page.getByRole('button', { name: '手动填写兴趣', exact: true }).waitFor();
+    assert.equal(await page.locator('.profile-sample-notice').count(), 0);
     initial = await bootstrap(page);
     assert.equal(initial.profile, null);
     assert.equal(initial.capabilities.ai, false);
@@ -114,7 +114,7 @@ await runBrowserSuite('profile', async ({ newContext, origin, check, artifactsDi
   });
 
   await check('画像向导限制 3–8 个兴趣，达到上限后可取消选择', async () => {
-    await page.getByRole('button', { name: '创建我的画像', exact: true }).click();
+    await page.getByRole('button', { name: '手动填写兴趣', exact: true }).click();
     const wizard = page.getByRole('dialog', { name: '认识你，从好奇心开始', exact: true });
     await wizard.waitFor();
     const next = wizard.getByRole('button', { name: '继续', exact: true });
@@ -330,9 +330,9 @@ await runBrowserSuite('profile', async ({ newContext, origin, check, artifactsDi
       mobilePage.setDefaultTimeout(15000);
       try {
         await mobilePage.goto('/#profile', { waitUntil: 'domcontentloaded' });
-        await mobilePage.getByRole('button', { name: '创建我的画像', exact: true }).waitFor();
-        await assertNoHorizontalOverflow(mobilePage, `${width}px 示例页`);
-        await mobilePage.getByRole('button', { name: '创建我的画像', exact: true }).click();
+        await mobilePage.getByRole('button', { name: '手动填写兴趣', exact: true }).waitFor();
+        await assertNoHorizontalOverflow(mobilePage, `${width}px 引导页`);
+        await mobilePage.getByRole('button', { name: '手动填写兴趣', exact: true }).click();
         const wizard = mobilePage.getByRole('dialog', { name: '认识你，从好奇心开始', exact: true });
         for (const label of ['人工智能', '摄影', '自然与户外']) await wizard.getByRole('button', { name: label, exact: true }).click();
         await assertNoHorizontalOverflow(mobilePage, `${width}px 兴趣步骤`);
@@ -391,7 +391,7 @@ await runBrowserSuite('profile', async ({ newContext, origin, check, artifactsDi
     const response = await waitForMutation(page, '/account', () => remove.click(), 'DELETE');
     assert.equal(response.ok, true);
     await settings.waitFor({ state: 'hidden' });
-    await page.getByRole('button', { name: '发现我的知识人格', exact: true }).waitFor();
+    await page.getByRole('button', { name: '手动填写兴趣', exact: true }).waitFor();
     const after = await bootstrap(page);
     assert.notEqual(after.user.id, before.user.id);
     assert.equal(after.user.provider, 'guest');
@@ -403,8 +403,8 @@ await runBrowserSuite('profile', async ({ newContext, origin, check, artifactsDi
     assert.equal(service.store.profile(before.user.id), null);
     assert.equal(service.store.imports(before.user.id).items.length, 0);
     await page.goto('/#profile', { waitUntil: 'domcontentloaded' });
-    await page.getByRole('button', { name: '创建我的画像', exact: true }).waitFor();
-    assert.equal(await page.locator('.profile-sample-notice').count(), 1);
+    await page.getByRole('button', { name: '手动填写兴趣', exact: true }).waitFor();
+    assert.equal(await page.locator('.onboarding-page').count(), 1);
   });
 
   report.artifacts = artifacts;

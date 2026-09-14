@@ -2,17 +2,31 @@ import assert from 'node:assert/strict';
 import { resolve } from 'node:path';
 import { runBrowserSuite } from './browser-harness.mjs';
 
+async function completeOnboarding(page) {
+  await page.getByRole('button', { name: '手动填写兴趣', exact: true }).click();
+  const wizard = page.getByRole('dialog', { name: '认识你，从好奇心开始', exact: true });
+  for (const name of ['人工智能', '阅读与写作', '心理学']) await wizard.getByRole('button', { name, exact: true }).click();
+  await wizard.getByRole('button', { name: '继续', exact: true }).click();
+  await wizard.getByRole('button', { name: '继续', exact: true }).click();
+  await wizard.getByRole('textbox', { name: /你的昵称/ }).fill('发现页访客');
+  await wizard.getByRole('button', { name: '生成我的知识人格', exact: true }).click();
+  const card = page.getByRole('dialog', { name: '我的人格卡片', exact: true });
+  await card.getByRole('button', { name: '关闭弹窗', exact: true }).click();
+  await page.evaluate(() => { location.hash = 'discover'; });
+}
+
 await runBrowserSuite('discovery', async ({ newContext, origin, check, artifactsDir }) => {
   const context = await newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
   const page = await context.newPage();
-  await page.goto(origin); await page.locator('.match-card').first().waitFor();
+  await page.goto(origin); await completeOnboarding(page); await page.locator('.match-card').first().waitFor();
   await page.evaluate(() => document.fonts.ready);
 
-  await check('桌面首页真实加载八位虚构体验伙伴与画像说明', async () => {
+  await check('桌面首页真实加载八位虚构体验伙伴与个人画像', async () => {
     assert.match(await page.title(), /同频/);
     assert.equal(await page.locator('.match-card').count(), 8);
     assert.match(await page.locator('.pool-note').textContent(), /虚构/);
-    assert.match(await page.locator('.sample-footnote').textContent(), /示例画像/);
+    assert.match(await page.locator('.mini-profile').textContent(), /规则分析/);
+    assert.equal(await page.locator('.sample-footnote').count(), 0);
     await page.screenshot({ path: resolve(artifactsDir, 'homepage-desktop.png'), fullPage: true });
   });
   await check('伙伴关键词和兴趣筛选以及空态可清除', async () => {
@@ -92,7 +106,7 @@ await runBrowserSuite('discovery', async ({ newContext, origin, check, artifacts
   for (const width of [390, 320]) {
     await check(`${width}px 手机首页、匹配弹窗和星图无横向溢出`, async () => {
       const phone = await newContext({ viewport: { width, height: 844 }, isMobile: true, hasTouch: true });
-      const mobile = await phone.newPage(); await mobile.goto(origin); await mobile.locator('.match-card').first().waitFor(); await mobile.evaluate(() => document.fonts.ready);
+      const mobile = await phone.newPage(); await mobile.goto(origin); await completeOnboarding(mobile); await mobile.locator('.match-card').first().waitFor(); await mobile.evaluate(() => document.fonts.ready);
       assert.equal(await mobile.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
       if (width === 390) await mobile.screenshot({ path: resolve(artifactsDir, 'homepage-mobile.png'), fullPage: true });
       await mobile.locator('.match-card').first().getByRole('button', { name: '为什么同频' }).click();

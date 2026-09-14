@@ -85,4 +85,3 @@ export function savePersonaCard(blob: Blob, sample = false) {
   link.href = url; link.download = `同频-${sample ? '体验示例' : '知识人格卡'}.png`; document.body.appendChild(link); link.click(); link.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-
