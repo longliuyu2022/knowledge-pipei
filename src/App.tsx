@@ -3,6 +3,7 @@ import { Bell, BookOpen, Bot, Check, ChevronRight, CircleHelp, Compass, Info, Me
 import { api, messageOf, setCSRF } from './api';
 import { Avatar, Empty, PageTitle, Spinner } from './components';
 import { ProfileWizard } from './ProfileWizard';
+import { PersonaShareDialog } from './PersonaShareDialog';
 import { ImportDialog, LoginDialog, SettingsDialog } from './AccountDialogs';
 import { MatchDialog } from './MatchDialog';
 import { ConnectionsPage } from './ConnectionsPage';
@@ -16,12 +17,12 @@ import type { Bootstrap, Match, PageActions, Pool } from './types';
 
 type ShellPage = 'discover' | 'my-circles' | 'matching' | 'profile' | 'connections' | 'notifications' | 'account' | 'companion';
 interface Route { page: ShellPage; circleId?: string; conversationId?: string }
-type Modal = 'wizard' | 'login' | 'import' | 'settings' | null;
+type Modal = 'wizard' | 'login' | 'import' | 'settings' | 'share' | null;
 const navigation = [
   { id: 'discover' as const, label: '发现问题', icon: Compass },
   { id: 'my-circles' as const, label: '我的同题', icon: UsersRound },
   { id: 'matching' as const, label: '同频伙伴', icon: Sparkles },
-  { id: 'profile' as const, label: '知识画像', icon: BookOpen },
+  { id: 'profile' as const, label: '知识人格', icon: BookOpen },
   { id: 'connections' as const, label: '消息', icon: MessagesSquare },
 ];
 const aliases: Record<string, ShellPage> = { discover: 'discover', circles: 'discover', 'my-circles': 'my-circles', matching: 'matching', pairing: 'matching', profile: 'profile', graph: 'profile', knowledge: 'profile', connections: 'connections', notifications: 'notifications', account: 'account', companion: 'companion' };
@@ -51,8 +52,9 @@ export default function App() {
   const [modal, setModal] = useState<Modal>(null), [selected, setSelected] = useState<Match | null>(null);
   const [conversationToOpen, setConversationToOpen] = useState<{ userId: string; id: string } | null>(null);
   const [version, setVersion] = useState(0), [unread, setUnread] = useState(0);
+  const [authReturn] = useState(() => new URLSearchParams(location.search).get('auth') === 'success');
   const [toast, setToast] = useState<{ text: string; error: boolean } | null>(null);
-  const dataRef = useRef(data), alive = useRef(true), refreshSequence = useRef(0);
+  const dataRef = useRef(data), alive = useRef(true), refreshSequence = useRef(0), authHandled = useRef(false);
   const saveLocks = useRef(new Set<string>()), toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   dataRef.current = data;
   const notify = useCallback((text: string, error = false) => {
@@ -91,6 +93,11 @@ export default function App() {
     const query = new URLSearchParams(location.search); query.delete('auth');
     history.replaceState(null, '', `${location.pathname}${query.size ? `?${query}` : ''}${location.hash}`);
   }, [notify]);
+  useEffect(() => {
+    if (!data || !authReturn || authHandled.current) return;
+    authHandled.current = true;
+    setModal(data.zhihuConnected && data.capabilities.zhihuData ? 'import' : 'wizard');
+  }, [data, authReturn]);
   useEffect(() => {
     if (!data?.user.id) return;
     const events = new EventSource('/api/events');
@@ -141,7 +148,7 @@ export default function App() {
     finally { saveLocks.current.delete(match.id); }
   }
   if (!data) return <div className="boot-screen tz-boot"><TongzhiBrand/><div>{bootError ? <Empty title="暂时没有连接上" text={bootError} action="重新连接" onAction={() => { setBootError(''); void refresh().catch(error => setBootError(messageOf(error))); }}/> : <Spinner text="正在打开同知…"/>}</div></div>;
-  const actions: PageActions = { data, refresh, notify, onCreate: () => open('wizard'), onLogin: () => open('login'), onImport: () => open(data.zhihuConnected ? 'import' : 'login'), onSelect: match => { setModal(null); setSelected(match); }, onSave, navigate };
+  const actions: PageActions = { data, refresh, notify, onCreate: () => open('wizard'), onShare: () => open('share'), onLogin: () => open('login'), onImport: () => open(data.zhihuConnected ? 'import' : 'login'), onSelect: match => { setModal(null); setSelected(match); }, onSave, navigate };
   const activePage = route.page === 'notifications' ? 'connections' : route.page;
   const currentNavigation = navigation.find(item => item.id === activePage) || (route.page === 'account' ? { label: '账号与偏好', icon: UserRound } : { label: 'AI 陪伴', icon: Bot });
   const messageCount = unread + data.incomingCount;
@@ -155,7 +162,7 @@ export default function App() {
       <div className="sidebar-bottom"><a href="#companion" className={`nav-item ${route.page === 'companion' ? 'active' : ''}`} onClick={() => setMobileMenu(false)}><Bot size={18}/><span>AI 陪伴</span><span className="tz-mini-ai">AI</span></a><button className="nav-item privacy-nav" onClick={() => open('settings')}><ShieldCheck size={18}/><span>数据与隐私</span></button><a href="#account" className="sidebar-user" onClick={() => setMobileMenu(false)}><Avatar name={data.profile?.input.name || data.user.name} seed={data.user.id} src={data.user.avatar} size={36}/><div><strong>{data.profile?.input.name || data.user.name}</strong><span>{data.zhihuConnected ? '知乎已连接' : data.user.provider === 'email' ? '邮箱账号' : '账号与偏好'}</span></div><ChevronRight size={16}/></a></div>
     </aside><div className="workspace"><header className="topbar"><div className="topbar-location"><button className="icon-button mobile-menu" aria-label="打开导航" aria-expanded={mobileMenu} onClick={() => setMobileMenu(value => !value)}><Menu size={21}/></button><currentNavigation.icon size={16}/><span>{route.circleId ? '同题讨论' : currentNavigation.label}</span><span className="breadcrumb-divider">/</span><span className="topbar-greeting">和好问题一起生长</span></div><div className="topbar-actions"><span className="hackathon-badge"><i/>知乎黑客松</span><button className="icon-button tz-notification-trigger" aria-label={`通知${unread ? `，${unread}条未读` : ''}`} onClick={() => navigate('notifications')}><Bell size={19}/>{unread > 0 && <i/>}</button><button className="button zhihu-button" onClick={data.zhihuConnected ? actions.onImport : actions.onLogin}><span className="zhihu-mark">知</span><span>{data.zhihuConnected ? '导入内容' : '连接知乎'}</span><ChevronRight size={14}/></button></div></header>
       <main className="main-content" id="main-content" tabIndex={-1}><div key={data.user.id} className="tz-route-content">
-        {(route.page === 'discover' || route.page === 'my-circles') && <CirclesPage view={route.page === 'my-circles' ? 'mine' : 'discover'} version={version} initialCircleId={route.circleId} onNavigate={navigate} onProfile={() => navigate('profile')} notify={circlesNotify} onConversation={openConversation}/>}
+        {(route.page === 'discover' || route.page === 'my-circles') && <>{route.page === 'discover' && !data.profile && !route.circleId && <section className="tz-card tz-onboarding" aria-labelledby="tz-onboarding-title"><div><span className="tz-status">第一次来到同知</span><h1 id="tz-onboarding-title">带着问题来，也从这里认识自己。</h1><p>连接知乎补充知识线索，或手动选择兴趣与人格方向；你也可以先看看大家正在讨论什么。</p></div><div className="tz-onboarding-actions"><button className="button primary" onClick={actions.onImport}><span className="zhihu-mark" aria-hidden="true">知</span>{data.zhihuConnected ? '导入知乎线索' : '连接知乎'}</button><button className="button secondary" onClick={actions.onCreate}><Sparkles size={16}/>创建知识人格</button><button className="text-button" onClick={() => document.querySelector('.cz-page')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}><Compass size={15}/>先逛问题小组</button></div></section>}<CirclesPage view={route.page === 'my-circles' ? 'mine' : 'discover'} version={version} initialCircleId={route.circleId} onNavigate={navigate} onProfile={() => navigate('profile')} notify={circlesNotify} onConversation={openConversation}/></>}
         {route.page === 'matching' && <MatchingPage actions={actions} version={version} onConnected={openConversation} onNavigate={navigate}/>}
         {route.page === 'profile' && <KnowledgePage actions={actions} version={version} onNavigate={navigate}/>}
         {route.page === 'companion' && <CompanionPage actions={actions} version={version} onNavigate={navigate}/>}
@@ -163,7 +170,8 @@ export default function App() {
         {(route.page === 'connections' || route.page === 'notifications') && <><div className="tz-tabs tz-page-tabs" role="group" aria-label="消息类型"><button className={route.page === 'connections' ? 'active' : ''} aria-pressed={route.page === 'connections'} onClick={() => navigate('connections')}><MessagesSquare size={15}/>伙伴私聊{data.incomingCount > 0 && <span className="tz-count">{data.incomingCount}</span>}</button><button className={route.page === 'notifications' ? 'active' : ''} aria-pressed={route.page === 'notifications'} onClick={() => navigate('notifications')}><Bell size={15}/>通知{unread > 0 && <span className="tz-count">{unread}</span>}</button></div>{route.page === 'connections' ? <ConnectionsPage actions={actions} version={version} requestedConversationId={conversationToOpen?.userId === data.user.id ? conversationToOpen.id : undefined} onConversationOpened={conversationOpened}/> : <><PageTitle eyebrow="KEEP THE CONVERSATION GOING" title="每一次回应，都有回音" description="同题讨论、伙伴匹配和知识更新，在这里继续。"/><NotificationsPage version={version} onNavigate={navigate} onUnread={setUnread}/></>}</>}
       </div><footer className="page-footer"><span>同知 · 从问题到理解</span><span>让知识生长，也让彼此看见。</span><span>知乎黑客松参赛作品</span></footer></main>
     </div><nav className="mobile-bottom-nav" aria-label="快捷导航">{navigation.map(item => <a key={item.id} href={`#${item.id}`} className={activePage === item.id ? 'active' : ''} aria-current={activePage === item.id ? 'page' : undefined}><item.icon size={20}/><span>{item.label}</span>{item.id === 'connections' && messageCount > 0 && <i/>}</a>)}</nav>
-    {modal === 'wizard' && <ProfileWizard key={data.user.id} data={data} onClose={() => setModal(null)} onComplete={async () => { await refresh(); setModal(null); }} notify={notify}/>}
+    {modal === 'wizard' && <ProfileWizard key={data.user.id} data={data} onClose={() => setModal(null)} onComplete={async () => { await refresh(); setModal(null); }} onSaved={() => setModal('share')} notify={notify}/>}
+    {modal === 'share' && data.profile && <PersonaShareDialog key={`${data.user.id}:${data.profile.revision}`} profile={data.profile} onClose={() => setModal(null)}/>}
     {modal === 'login' && <LoginDialog key={data.user.id} actions={actions} onClose={() => setModal(null)}/>}
     {modal === 'import' && <ImportDialog key={data.user.id} actions={actions} onClose={() => setModal(null)}/>}
     {modal === 'settings' && <SettingsDialog key={data.user.id} actions={actions} onClose={() => setModal(null)} onReset={reset}/>}

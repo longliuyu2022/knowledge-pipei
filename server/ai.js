@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { cosine } from './matching.js';
+import { personaFor } from '../shared/personas.js';
 
 class ModelError extends Error {
   constructor(reason) { super(reason); this.reason = reason; }
@@ -118,7 +119,7 @@ export class Intelligence {
     });
     if (result.mode !== 'model') return { ...profile, analysis: result };
     const { mode, ...narrative } = result;
-    return { ...profile, ...narrative, analysis: { mode, notice: 'AI 根据你提供的兴趣与文字整理，可随时编辑重建。' } };
+    return { ...profile, ...narrative, title: personaFor(profile.input)?.name || narrative.title, analysis: { mode, notice: 'AI 根据你提供的兴趣与文字整理，可随时编辑重建。' } };
   }
   async explain(own, match) {
     const data = { me: { interests: own.interests.map(t => t.label), about: own.input.about, question: own.input.question, style: own.style.label, goals: own.input.goals }, partner: { name: match.name, interests: match.interests.map(t => t.label), about: match.about, question: match.question, style: match.style.label, goals: match.goals, demo: match.demo }, sharedTopicIds: match.shared.map(t => t.id), breakdown: match.breakdown };

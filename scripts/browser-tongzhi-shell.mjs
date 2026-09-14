@@ -65,12 +65,15 @@ try {
   await check('新用户首页展示问题，五项导航与无虚构画像状态正确', async () => {
     await goto('#discover');
     assert.equal(await page.getByRole('navigation', { name: '主导航', exact: true }).getByRole('link').count(), 5);
+    await page.getByRole('heading', { name: '带着问题来，也从这里认识自己。', exact: true }).waitFor();
+    await page.getByRole('button', { name: '创建知识人格', exact: true }).waitFor();
+    await page.getByRole('button', { name: '先逛问题小组', exact: true }).waitFor();
     await page.getByRole('heading', { name: /一个好问题/ }).first().waitFor();
     own = await read(page, '/bootstrap'); assert.equal(own.profile, null);
     await goto('#profile'); await page.getByText('你的知识画像，从真实的材料开始', { exact: true }).waitFor();
     assert.equal(await page.locator('.profile-sample-notice').count(), 0);
     assert.equal(requests.filter(item => item.url.includes('/matches?pool=demo')).length, 0);
-    await write(page, '/profile', { input: { ...DEFAULT_INPUT, name: '同知浏览器甲', question: '阅读怎样帮助我们验证人工智能给出的解释？' }, revision: 0, useAI: false });
+    await write(page, '/profile', { input: { ...DEFAULT_INPUT, name: '同知浏览器甲', question: '阅读怎样帮助我们验证人工智能给出的解释？', personaDrive: 'empathy', personaConnection: 'duo' }, revision: 0, useAI: false });
   });
   await check('邮箱注册保留访客资料，偏好需要本人主动启用', async () => {
     await goto('#account'); await page.getByTestId('preference-chatAnalysis').waitFor();
@@ -82,7 +85,7 @@ try {
     await uiWrite('/auth/email/register', () => page.getByTestId('account-auth-submit').click());
     await page.getByText('tongzhi-browser@example.invalid', { exact: true }).waitFor();
     const next = await read(page, '/bootstrap'); assert.equal(next.user.id, own.user.id); assert.ok(next.profile);
-    await uiWrite('/preferences', () => page.getByTestId('preference-chatAnalysis').check(), 'PUT');
+    await uiWrite('/preferences', () => page.getByTestId('preference-chatAnalysis').click(), 'PUT');
     await page.getByTestId('preference-chatAnalysis').waitFor(); assert.equal((await read(page, '/preferences')).preferences.chatAnalysis, true);
     assert.equal((await read(page, '/preferences')).preferences.aiAnalysis, false);
   });
@@ -161,6 +164,21 @@ try {
     await uiWrite(`/knowledge/suggestions/${suggestion.id}/accept`, () => page.getByTestId('knowledge-accept').click());
     assert.equal((await read(page, '/bootstrap')).profile.revision, profileRevision + 1);
     assert.equal((await read(page, '/knowledge/suggestions')).items[0].status, 'accepted');
+  });
+  await check('知识人格展示本人类型并生成可分享图片', async () => {
+    const current = (await read(page, '/bootstrap')).profile;
+    assert.equal(current.input.personaDrive, 'empathy');
+    assert.equal(current.input.personaConnection, 'duo');
+    assert.equal(current.title, '深夜接话人');
+    await goto('#profile');
+    await page.getByRole('button', { name: '人格与分享卡', exact: true }).click();
+    await page.getByRole('heading', { name: /深夜接话人/ }).first().waitFor();
+    assert.equal(await page.locator('.persona-analysis-grid article').count(), 6);
+    await page.getByRole('button', { name: '分享人格卡', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: '我的人格卡片', exact: true });
+    await dialog.locator('.persona-share-image').waitFor();
+    assert.match(await dialog.textContent(), /深夜接话人/);
+    await dialog.getByRole('button', { name: '关闭弹窗', exact: true }).click();
   });
   await check('匹配支持七天请求、暂停与恢复，双方确认前不建私聊', async () => {
     await goto('#matching'); await page.getByTestId('matching-start').waitFor();

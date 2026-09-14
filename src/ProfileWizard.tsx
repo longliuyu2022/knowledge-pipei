@@ -1,6 +1,7 @@
 import { useId, useRef, useState, type FormEvent } from 'react';
 import { ArrowLeft, ArrowRight, Check, Compass, Eye, LockKeyhole, Sparkles } from 'lucide-react';
 import { DOMAINS, GOALS, STYLES, TOPICS } from '../shared/catalog.js';
+import { PERSONA_DRIVES, PERSONA_CONNECTIONS, personaFor } from '../shared/personas.js';
 import { api, APIError, messageOf, setCSRF } from './api';
 import { Dialog, Spinner } from './components';
 import type { Bootstrap, Input, Profile } from './types';
@@ -11,11 +12,12 @@ interface WizardProps {
   onClose: () => void;
   onComplete: () => Promise<void>;
   notify: (text: string, error?: boolean) => void;
+  onSaved?: () => void;
 }
 
 const cloneInput = (input: Input): Input => ({ ...input, topicIds: [...input.topicIds], goals: [...input.goals] });
 
-export function ProfileWizard({ data, onClose, onComplete, notify }: WizardProps) {
+export function ProfileWizard({ data, onClose, onComplete, notify, onSaved }: WizardProps) {
   const uid = useId();
   const [step, setStep] = useState(0);
   const [input, setInput] = useState<Input>(() => data.profile ? cloneInput(data.profile.input) : {
@@ -111,6 +113,7 @@ export function ProfileWizard({ data, onClose, onComplete, notify }: WizardProps
       await onComplete();
       notify(discoverable ? '知识画像已保存，伙伴们可以发现你了。' : '知识画像已保存，当前未加入匹配池。');
       onClose();
+      onSaved?.();
     } catch (cause) {
       const prefix = phase === 'visibility' ? '画像已保存，但发现设置未更新。' : phase === 'refresh' ? '画像已保存，但页面还未同步。' : '';
       setError(prefix + messageOf(cause));
@@ -147,6 +150,20 @@ export function ProfileWizard({ data, onClose, onComplete, notify }: WizardProps
         </div>}
 
         {step === 1 && <div className="wizard-preferences">
+          <fieldset className="wizard-choice-group"><legend>此刻，你更看重什么？ <span>选填 · 单选</span></legend>
+            <div className="wizard-style-options">{PERSONA_DRIVES.map(drive => <label key={drive.id} className={`wizard-choice ${input.personaDrive === drive.id ? 'selected' : ''}`}>
+              <input type="radio" name={`${uid}-persona-drive`} checked={input.personaDrive === drive.id} onChange={() => update('personaDrive', drive.id)} />
+              <span><strong>{drive.label}</strong><small>{drive.description}</small></span>
+            </label>)}</div>
+          </fieldset>
+          <fieldset className="wizard-choice-group"><legend>想法通常怎样展开？ <span>选填 · 单选</span></legend>
+            <div className="wizard-style-options">{PERSONA_CONNECTIONS.map(connection => <label key={connection.id} className={`wizard-choice ${input.personaConnection === connection.id ? 'selected' : ''}`}>
+              <input type="radio" name={`${uid}-persona-connection`} checked={input.personaConnection === connection.id} onChange={() => update('personaConnection', connection.id)} />
+              <span><strong>{connection.label}</strong><small>{connection.description}</small></span>
+            </label>)}</div>
+          </fieldset>
+          <p className="wizard-small-note">{personaFor(input) ? `你的人格名片：${personaFor(input)?.name}。这是当前的自我描述，随时可以调整。` : '选好这两个方向，就能点亮 12 种人格中的一张名片。也可以暂时跳过。'}</p>
+          {(input.personaDrive || input.personaConnection) && <button type="button" className="text-button" onClick={() => { update('personaDrive', undefined); update('personaConnection', undefined); }}>清除人格选择</button>}
           <fieldset className="wizard-choice-group"><legend>更喜欢的交流方式 <span>单选</span></legend>
             <div className="wizard-style-options">{STYLES.map(style => <label key={style.id} className={`wizard-choice ${input.styleId === style.id ? 'selected' : ''}`}>
               <input type="radio" name={`${uid}-style`} checked={input.styleId === style.id} onChange={() => update('styleId', style.id)} />

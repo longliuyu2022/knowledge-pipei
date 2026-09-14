@@ -1,8 +1,11 @@
 import { useRef, useState } from 'react';
 import { ArrowDownToLine, ArrowRight, ArrowUpRight, BookOpen, Check, ChevronDown, ChevronUp, CircleHelp, Compass, Eye, FileText, Fingerprint, LockKeyhole, PencilLine, Quote, Sparkles } from 'lucide-react';
 import { GOALS, STYLE_AXES } from '../shared/catalog.js';
+import { personaFor } from '../shared/personas.js';
 import { api, formatTime, messageOf } from './api';
 import { Avatar, PageTitle, Radar, SourceBadge, Spinner } from './components';
+import { PersonaExplorer } from './PersonaExplorer';
+import { createPersonaCard, savePersonaCard } from './persona-card';
 import type { Evidence, PageActions, Profile } from './types';
 import './profile.css';
 
@@ -16,85 +19,6 @@ function sourceUrl(value?: string) {
   catch { return ''; }
 }
 
-function drawWrapped(ctx: CanvasRenderingContext2D, value: string, x: number, y: number, maxWidth: number, lineHeight: number, maxLines: number) {
-  const chars = [...value.replace(/\s+/g, ' ').trim()];
-  let line = '', row = 0;
-  for (let index = 0; index < chars.length; index++) {
-    const next = line + chars[index];
-    if (ctx.measureText(next).width > maxWidth && line) {
-      if (row === maxLines - 1) {
-        while (line && ctx.measureText(`${line}…`).width > maxWidth) line = line.slice(0, -1);
-        ctx.fillText(`${line}…`, x, y + row * lineHeight);
-        return;
-      }
-      ctx.fillText(line, x, y + row * lineHeight);
-      line = chars[index]; row++;
-    } else line = next;
-  }
-  if (line) ctx.fillText(line, x, y + row * lineHeight);
-}
-
-async function downloadCard(profile: Profile, sample: boolean) {
-  await document.fonts.ready;
-  const canvas = document.createElement('canvas');
-  canvas.width = 1600; canvas.height = 2200;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('当前浏览器无法生成图片，请换一个浏览器重试。');
-  ctx.scale(2, 2);
-  const font = '"Tongpin Sans", "PingFang SC", "Microsoft YaHei", sans-serif';
-  const rounded = (x: number, y: number, width: number, height: number, radius: number, fill: string) => {
-    ctx.beginPath(); ctx.roundRect(x, y, width, height, radius); ctx.fillStyle = fill; ctx.fill();
-  };
-  const background = ctx.createLinearGradient(0, 0, 800, 1100);
-  background.addColorStop(0, '#f6f3ff'); background.addColorStop(.5, '#fffefa'); background.addColorStop(1, '#f2f3ec');
-  ctx.fillStyle = background; ctx.fillRect(0, 0, 800, 1100);
-  ctx.strokeStyle = '#e5e0ee'; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.roundRect(28, 28, 744, 1044, 25); ctx.stroke();
-  ctx.fillStyle = '#494050'; ctx.font = `600 27px ${font}`; ctx.fillText('同知', 72, 87);
-  ctx.fillStyle = '#a8a0b3'; ctx.font = `12px ${font}`; ctx.textAlign = 'right'; ctx.fillText('KNOWLEDGE PERSONA', 726, 85); ctx.textAlign = 'left';
-  rounded(72, 115, sample ? 188 : 146, 32, 16, '#eae5f6');
-  ctx.font = `13px ${font}`; ctx.fillStyle = '#8277ae'; ctx.fillText(sample ? '知识人格 · 体验示例' : '我的知识人格卡', 86, 136);
-  ctx.fillStyle = '#85808c'; ctx.font = `21px ${font}`; drawWrapped(ctx, `${profile.input.name}的好奇心宇宙`, 72, 197, 650, 28, 1);
-  let titleSize = 42;
-  ctx.font = `600 ${titleSize}px ${font}`;
-  while (ctx.measureText(profile.title).width > 652 && titleSize > 23) { titleSize--; ctx.font = `600 ${titleSize}px ${font}`; }
-  ctx.fillStyle = '#393342'; ctx.fillText(profile.title, 72, 255);
-  ctx.fillStyle = '#7c7586'; ctx.font = `18px ${font}`; drawWrapped(ctx, profile.summary, 72, 305, 650, 29, 3);
-  const center = { x: 400, y: 573 }, radius = 133;
-  const point = (index: number, fraction: number) => ({ x: center.x + Math.sin(index * Math.PI * 2 / profile.dimensions.length) * radius * fraction, y: center.y - Math.cos(index * Math.PI * 2 / profile.dimensions.length) * radius * fraction });
-  const polygon = (values: number[]) => {
-    ctx.beginPath(); values.forEach((value, index) => { const p = point(index, value); if (index === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); }); ctx.closePath();
-  };
-  for (const fraction of [1, .75, .5, .25]) { polygon(profile.dimensions.map(() => fraction)); ctx.strokeStyle = '#ded9e9'; ctx.stroke(); }
-  profile.dimensions.forEach((_dimension, index) => { const p = point(index, 1); ctx.beginPath(); ctx.moveTo(center.x, center.y); ctx.lineTo(p.x, p.y); ctx.strokeStyle = '#e7e2ee'; ctx.stroke(); });
-  polygon(profile.dimensions.map(dimension => Math.max(0, Math.min(100, dimension.value)) / 100));
-  ctx.fillStyle = '#8277cb32'; ctx.fill(); ctx.strokeStyle = '#8277cb'; ctx.lineWidth = 2; ctx.stroke();
-  profile.dimensions.forEach((dimension, index) => {
-    const p = point(index, Math.max(0, Math.min(100, dimension.value)) / 100);
-    ctx.beginPath(); ctx.arc(p.x, p.y, 4, 0, Math.PI * 2); ctx.fillStyle = '#8277cb'; ctx.fill();
-    const label = point(index, 1.38); ctx.fillStyle = '#807687'; ctx.font = `17px ${font}`; ctx.textAlign = 'center'; ctx.fillText(dimension.label, label.x, label.y + 6);
-  });
-  ctx.textAlign = 'left';
-  let chipX = 72, chipY = 787;
-  ctx.font = `15px ${font}`;
-  for (const interest of profile.interests.slice(0, 8)) {
-    const width = ctx.measureText(interest.label).width + 28;
-    if (chipX + width > 728) { chipX = 72; chipY += 44; }
-    if (chipY > 875) break;
-    rounded(chipX, chipY, width, 32, 16, '#efebf5'); ctx.fillStyle = '#817491'; ctx.fillText(interest.label, chipX + 14, chipY + 22); chipX += width + 9;
-  }
-  ctx.fillStyle = '#6f657a'; ctx.font = `16px ${font}`;
-  drawWrapped(ctx, `${profile.style.label}  ·  ${GOALS.filter(goal => profile.input.goals.includes(goal.id)).map(goal => goal.short).join(' / ')}`, 72, 937, 650, 23, 1);
-  ctx.beginPath(); ctx.moveTo(72, 972); ctx.lineTo(728, 972); ctx.strokeStyle = '#e0dae8'; ctx.lineWidth = 1; ctx.stroke();
-  ctx.fillStyle = '#867d91'; ctx.font = `17px ${font}`; ctx.fillText('让共同的好奇心，成为相遇的起点。', 72, 1007);
-  ctx.fillStyle = '#9c95a4'; ctx.font = `12px ${font}`; ctx.fillText(sample ? '体验示例，不代表你的个人分析结果' : '兴趣探索参考，不代表能力评分或人格诊断', 72, 1040);
-  ctx.textAlign = 'right'; ctx.fillText(profile.analysis.mode === 'model' ? 'AI 兴趣解读' : '基于所选兴趣', 728, 1040);
-  const blob = await new Promise<Blob>((resolve, reject) => canvas.toBlob(value => value ? resolve(value) : reject(new Error('图片生成失败，请重试。')), 'image/png'));
-  const url = URL.createObjectURL(blob), link = document.createElement('a');
-  link.href = url; link.download = `同知-${sample ? '体验示例' : '知识人格卡'}.png`; document.body.appendChild(link); link.click(); link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
-}
-
 function EvidenceItem({ evidence, used }: { evidence: Evidence; used: boolean }) {
   const url = sourceUrl(evidence.url);
   return <li className="profile-evidence-item"><span className={`profile-evidence-icon ${used ? 'used' : ''}`}>{evidence.kind === 'selected' ? <Check size={16} /> : <FileText size={16} />}</span>
@@ -106,6 +30,7 @@ export function ProfilePage({ actions }: { actions: PageActions }) {
   const { data } = actions;
   const profile = data.profile || data.sampleProfile;
   const isSample = !data.profile;
+  const persona = personaFor(profile.input);
   const [exporting, setExporting] = useState(false);
   const [visibilityBusy, setVisibilityBusy] = useState(false);
   const pending = useRef(false);
@@ -117,7 +42,7 @@ export function ProfilePage({ actions }: { actions: PageActions }) {
   async function exportCard() {
     if (exporting) return;
     setExporting(true);
-    try { await downloadCard(profile, isSample); actions.notify('知识人格卡已生成，已开始下载 PNG 图片。'); }
+    try { savePersonaCard(await createPersonaCard(profile, isSample), isSample); actions.notify('知识人格卡已生成，已开始下载 PNG 图片。'); }
     catch (cause) { actions.notify(messageOf(cause), true); }
     finally { setExporting(false); }
   }
@@ -137,7 +62,7 @@ export function ProfilePage({ actions }: { actions: PageActions }) {
 
   return <div className="profile-page">
     <PageTitle eyebrow="A LITTLE MORE ABOUT YOU" title="我的知识人格" description="把让你停留的内容，连成一幅独特的自己。">
-      <div className="profile-page-actions"><button className="button secondary" onClick={exportCard} disabled={exporting}>{exporting ? <Spinner text="生成图片…" /> : <><ArrowDownToLine size={16} />{isSample ? '下载示例卡' : '下载人格卡'}</>}</button><button className="button primary" onClick={actions.onCreate}>{isSample ? <Sparkles size={16} /> : <PencilLine size={16} />}{isSample ? '创建我的画像' : '编辑画像'}</button></div>
+      <div className="profile-page-actions">{!isSample && <button className="button secondary" onClick={actions.onShare}>分享人格卡</button>}<button className="button secondary" onClick={exportCard} disabled={exporting}>{exporting ? <Spinner text="生成图片…" /> : <><ArrowDownToLine size={16} />{isSample ? '下载示例卡' : '下载人格卡'}</>}</button><button className="button primary" onClick={actions.onCreate}>{isSample ? <Sparkles size={16} /> : <PencilLine size={16} />}{isSample ? '创建我的画像' : '编辑画像'}</button></div>
     </PageTitle>
 
     {isSample && <div className="profile-sample-notice"><span><Compass size={18} /></span><div><strong>先看看，一份知识人格是什么模样</strong><p>下面是一份体验示例，不是对你的分析。选择自己的兴趣，就能生成你的专属画像。</p></div><button className="text-button" onClick={actions.onCreate}>从我的兴趣开始<ArrowRight size={15} /></button></div>}
@@ -145,9 +70,11 @@ export function ProfilePage({ actions }: { actions: PageActions }) {
     <div className="profile-overview">
       <section className="panel profile-persona">
         <div className="profile-persona-top"><div className="profile-persona-user"><Avatar name={profile.input.name} seed={isSample ? 'profile-example' : data.user.id} src={isSample ? undefined : data.user.avatar} size={48} /><div><strong>{profile.input.name}</strong><span>{isSample ? '体验示例' : '我的好奇心宇宙'}</span></div></div><SourceBadge mode={profile.analysis.mode} /></div>
-        <p className="profile-persona-label">你的知识探索者称号</p>
+        <p className="profile-persona-label">{persona ? '你的人格名片 · 12 种有趣的灵魂' : '你的知识探索者称号'}</p>
         <h2>{profile.title}<span aria-hidden="true">✧</span></h2>
+        {persona && <p className="persona-quote">{persona.tagline}</p>}
         <p className="profile-persona-summary">{profile.summary}</p>
+        {persona && <div className="tags">{persona.keywords.map(word => <span className="tag tag-purple" key={word}>{word}</span>)}</div>}
         <div className="tags">{profile.interests.slice(0, 5).map(interest => <span className="tag profile-persona-tag" key={interest.id}>{interest.label}</span>)}</div>
         <div className="profile-highlights">{profile.highlights.map((highlight, index) => <div key={`${index}-${highlight}`}><span>{index === 0 ? <BookOpen size={17} /> : <Sparkles size={17} />}</span><p>{highlight}</p></div>)}</div>
         <p className="profile-caption"><Fingerprint size={13} />兴趣的一个切面，等待你不断写下新的一页</p>
@@ -156,6 +83,7 @@ export function ProfilePage({ actions }: { actions: PageActions }) {
     </div>
 
     {profile.analysis.notice && <p className="profile-analysis-note"><CircleHelp size={15} />{profile.analysis.notice}</p>}
+    <PersonaExplorer key={`${profile.input.personaDrive}-${profile.input.personaConnection}-${isSample}`} profile={profile} sample={isSample} onEdit={actions.onCreate}/>
 
     <div className="profile-detail-grid">
       <section className="panel profile-interests-panel"><div className="section-heading"><h2>兴趣的线索</h2><span className="profile-count">{profile.interests.length} 个主题</span></div><p className="profile-section-description">从你主动分享的内容中，找到好奇心的落点</p>

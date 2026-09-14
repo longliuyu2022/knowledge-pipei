@@ -75,6 +75,12 @@
 .tz-stack { display: flex; flex-direction: column; gap: 20px; }
 .tz-two-column { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(270px, .9fr); gap: 24px; align-items: start; }
 .tz-card { background: #fffefa; border: 1px solid #e1e7dc; border-radius: 16px; padding: 26px; min-width: 0; box-shadow: 0 3px 14px #48593603; }
+.tz-onboarding { display: flex; align-items: center; justify-content: space-between; gap: 28px; margin-bottom: 24px; padding: 28px 30px; background: linear-gradient(125deg, #f4effb, #fffdf7 62%, #eef5f0); border-color: #e4dcec; }
+.tz-onboarding > div:first-child { max-width: 680px; }
+.tz-onboarding h1 { margin: 10px 0 8px; color: #493956; font-size: clamp(22px, 2.4vw, 32px); line-height: 1.45; }
+.tz-onboarding p { margin: 0; color: #756b7d; font-size: 13px; line-height: 1.9; }
+.tz-onboarding-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; min-width: 300px; }
+.tz-onboarding-actions .text-button { padding: 10px 4px; }
 .tz-card h2 { font-size: 18px; font-weight: 600; line-height: 1.6; margin: 0 0 13px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; color: #365242; }
 .tz-card h2 > svg { color: #6b8c64; flex-shrink: 0; }
 .tz-card h3 { font-size: 16px; line-height: 1.6; margin: 0 0 8px; }
@@ -274,6 +280,8 @@
   .tz-companion-chat { min-height: 500px; }
 }
 @media (max-width: 800px) {
+  .tz-onboarding { align-items: flex-start; flex-direction: column; gap: 18px; }
+  .tz-onboarding-actions { justify-content: flex-start; min-width: 0; }
   .tongzhi-shell .sidebar { overflow-y: auto; }
   .tongzhi-shell .main-content { padding-top: 24px; }
   .tongzhi-shell .topbar-actions { gap: 8px; }
@@ -286,6 +294,9 @@
   .tongzhi-shell .mobile-bottom-nav > a { min-width: 0; width: 20%; }
 }
 @media (max-width: 560px) {
+  .tz-onboarding { padding: 21px 18px; }
+  .tz-onboarding-actions { display: grid; width: 100%; }
+  .tz-onboarding-actions .button, .tz-onboarding-actions .text-button { justify-content: center; width: 100%; }
   .tongzhi-shell .main-content { padding: 23px 17px 18px; }
   .tongzhi-shell .page-title h1 { font-size: 25px; line-height: 1.6; letter-spacing: -.4px; }
   .tongzhi-shell .page-title > div > p:last-child { font-size: 13px; }
